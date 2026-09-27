@@ -551,6 +551,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"Circle",
 		"SpotLight",
 		"Explosion",
+		"Apple"
 	};
 
 	int32 ActorTypeIndex = static_cast<int32>(mGuiInputField.PrimitiveType);
@@ -608,6 +609,15 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 				NewActor->AddRootSceneComponent(MeshComponent);
 			}
+			else if (strcmp(ActorTypeName, "Apple") == 0)
+			{
+				NewActor = FObjectFactory::ConstructObject<AActor>();
+
+				UStaticMeshComponent* MeshComponent = FObjectFactory::ConstructObject<UStaticMeshComponent>(FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1));
+				MeshComponent->SetMesh(FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(FName("Assets/Meshes/apple_mid.uasset"), true));
+				NewActor->AddRootSceneComponent(MeshComponent);
+				
+			}	
 			else
 			{
 				UE_LOG_ERROR("Unknown actor class: %s", ActorTypeName);
