@@ -213,6 +213,7 @@ ConsoleWindow::ConsoleWindow()
 	Commands.push_back("STAT RENDER");
 	Commands.push_back("STAT ALL");
 	Commands.push_back("STAT NONE");
+	Commands.push_back("STAT OPT");
 	AutoScroll = true;
 	ScrollToBottom = false;
 }
@@ -398,6 +399,15 @@ void ConsoleWindow::ExecCommand(const char* command_line)
 		bShowStatFPS = false;
 		bShowStatMemory = false;
 		bShowStatRender = false;
+	}
+	else if (Stricmp(command_line, "STAT OPT") == 0)
+	{
+		if (bShowOptimization)
+		{
+			bShowOptimization = false;
+			return;
+		}
+		bShowOptimization = true;
 	}
 	else
 	{

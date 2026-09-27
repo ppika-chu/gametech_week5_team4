@@ -25,6 +25,9 @@ public:
 	bool bShowStatMemory = false;
 	bool bShowStatRender = false;
 
+	// 최적화 관련 stat은 default로 켜두기
+	bool bShowOptimization = true;
+
 	void Process(float BottomBarHeight);
 	static ConsoleWindow& Get() {
 		static ConsoleWindow Instance;

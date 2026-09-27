@@ -100,6 +100,10 @@ public:
 	FCamera mCamera;
 	FGizmo mGizmo;
 
+	uint64 GetPickAttemptCount() const { return PickAttemptCount; }
+	uint64 GetPickTestCount() const { return PickTestCount; }
+	double GetPickAccumulatedTimeMs() const { return PickAccumulatedTimeMs; }
+
 private:
 	// 선택된 액터의 RenderInfo는 캐시하지 않는다. 필요할 때 ClickedActor->GetRenderInfos()로 그때그때 뽑는다.
 	//마우스 밑 무언가가 Actor이면 저장. RayCast 에서 채워야 함 (아직 미구현)
@@ -130,6 +134,16 @@ private:
 
 	EViewModeIndex mViewModeIndex = EViewModeIndex::VMI_Lit;
 	EViewportType mViewportType = EViewportType::Perspective;
+
+	// 마우스 클릭(picking) 할 때마다 +1
+	mutable uint64 PickAttemptCount = 0;
+
+	// 충돌 검사할 때마다 +1
+	mutable uint64 PickTestCount = 0;
+
+	// picking 검사 시작 ~ 끝 시간 누적
+	mutable double PickAccumulatedTimeMs = 0.0;
+
 };
 
 struct FViewport

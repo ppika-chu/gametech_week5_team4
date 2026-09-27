@@ -86,7 +86,10 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	ConsoleWindow& console = ConsoleWindow::Get();
 	console.Init(clientWidth);
 
-	FrameTimer = new FFrameTimer(120);
+	// FrameTimer = new FFrameTimer(120);
+
+	// 최적화 지표 측정을 위해 limit 없앰.
+	FrameTimer = new FFrameTimer(100000);
 
 	mEditorLayout.Initialize(FRect(0, 0, (float)clientWidth, (float)clientHeight));
 

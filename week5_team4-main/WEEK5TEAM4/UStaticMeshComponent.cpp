@@ -100,6 +100,9 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+    // actor 당 한 번 count
+    ++RenderCollector.DrawnObjectCount;
+
     for (int32 SectionIndex = 0; SectionIndex < mMeshAsset->GetSections().Num(); ++SectionIndex)
     {
         const FStaticMeshSection& Section = mMeshAsset->GetSections()[SectionIndex];

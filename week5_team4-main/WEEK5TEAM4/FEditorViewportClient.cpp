@@ -78,10 +78,17 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	// 커서를 이미지 좌상단 기준으로 옮기고, 화면 크기도 이미지 크기를 쓴다.
 	const float ViewportWidth = ViewportRect.Width;
 	const float ViewportHeight = ViewportRect.Height;
+
+
 	if (ViewportWidth <= 0.f || ViewportHeight <= 0.f)
 	{
 		return nullptr;
 	}
+
+	// Picking 횟수 +1
+	++PickAttemptCount;
+	// Picking time 기록 start
+	const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(ViewportRect.X);
 	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(ViewportRect.Y);
@@ -100,6 +107,8 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
 	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 	{
+		// 충돌 검사할 때마다 +1
+		++PickTestCount;
 		float HitT = FLT_MAX;
 		if (!PickTarget->RayCastComponent(PickingRay, HitT))
 		{
@@ -113,6 +122,10 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 		}
 	}
 
+	const auto EndTime = std::chrono::high_resolution_clock::now();
+
+	// 누적 시간 ( End - Start ) 기록
+	PickAccumulatedTimeMs += std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
 	return NearestActor;
 }
 

@@ -76,6 +76,14 @@ public:
 	TArray<FRenderLineInfo> LineInfos;     // 라인 패스
 	TArray<UPrimitiveComponent*> PickTargets;
 
+	// 전체 액터 수 = DrawnObjectCount + CulledObjectCount
+	// 그려진 액터 개수
+	mutable uint32 DrawnObjectCount = 0;
+
+	// Culling 된 Actor count
+	// TODO : 현재는 culling 최적화가 없어서 ++ 되는 곳이 없음.
+	mutable uint32 CulledObjectCount = 0;
+
 	inline void AddQuadInfo(const FRenderQuadInfo& QuadInfo)
 	{
 		if (QuadInfo.EnableDepthTest)
@@ -109,12 +117,18 @@ public:
 		TransparentQuadInfos.Empty();
 		OverlayQuadInfos.Empty();
 		Quad2DInfos.Empty();
+
+		DrawnObjectCount = 0;
+        CulledObjectCount = 0;
 	}
 
 	inline const TArray<FRenderQuadInfo>& GetOpaqueQuadInfos() const { return OpaqueQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetTransparentQuadInfos() const { return TransparentQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetOverlayQuadInfos() const { return OverlayQuadInfos; }
 	inline const TArray<FRenderQuad2DInfo>& GetQuad2DInfos() const { return Quad2DInfos; }
+
+	uint32 GetDrawnObjCount() const { return DrawnObjectCount; }
+	uint32 GetCulledObjCount() const { return CulledObjectCount; }
 
 private:
 	TArray<FRenderQuadInfo> OpaqueQuadInfos;

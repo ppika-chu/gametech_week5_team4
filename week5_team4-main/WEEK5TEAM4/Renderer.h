@@ -507,7 +507,9 @@ public:
 	FORCEINLINE TSharedPtr<FRenderTarget2D> GetBindedRenderTarget() const { return BindedRenderTarget; }
 	FORCEINLINE TSharedPtr<FDepthStencil> GetBindedDepthStencil() const { return BindedDepthStencil; }
 
+	// GPU Draw 호출 횟수
 	mutable uint64 DrawCallCount = 0;
+
 	uint64 GetDrawCallCount() const { return DrawCallCount; }
 	void ResetDrawCallCount() { DrawCallCount = 0; }
 private:
