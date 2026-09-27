@@ -107,6 +107,8 @@ void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 	SwapChainDesc.Windowed = TRUE;
 	SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
+	// Tearing 명시적 허용 (fps 제한 풀기 위해)
+	SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	UINT CreateDeviceFlags = 0;
 
 #if defined(_DEBUG)
@@ -219,7 +221,10 @@ void URenderer::Release()
 
 void URenderer::SwapBuffer()
 {
-	SwapChain->Present(1, 0);
+	// SwapChain->Present(1, 0);
+	// fps 고정 빼기 (Tearing 명시적 허용)
+	SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+
 }
 
 void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)

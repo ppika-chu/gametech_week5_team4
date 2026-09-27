@@ -35,6 +35,7 @@
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
 #include "FTextBuilder.h"
+#include "FSceneConverter.h"
 
 FSceneManager::FSceneManager()
 {
@@ -462,6 +463,52 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::End();
 		}
 		ImGui::PopStyleVar();
+
+		// 최적화 전용 STAT
+		if (console.bShowOptimization)
+		{
+			const ImGuiWindowFlags OptFlags =
+				ImGuiWindowFlags_NoDecoration |
+				ImGuiWindowFlags_NoBackground |
+				ImGuiWindowFlags_AlwaysAutoResize |
+				ImGuiWindowFlags_NoSavedSettings |
+				ImGuiWindowFlags_NoFocusOnAppearing |
+				ImGuiWindowFlags_NoNav |
+				ImGuiWindowFlags_NoInputs;
+
+			// Viewport 창 안쪽 좌상단에 붙는 입력을 받지 않는 오버레이 창
+			ImGui::SetNextWindowPos(ImVec2(mViewportX + 15.0f, mViewportY + 15.0f), ImGuiCond_Always);
+			
+			ImGui::Begin("##Optimization", nullptr, OptFlags);
+			ImGui::PushFont(nullptr, 20.0f);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("FPS");
+			ImGui::PopStyleColor();
+
+			ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
+			ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
+			
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("Picking");
+			ImGui::PopStyleColor();
+			
+			ImGui::Text("Picking Count: %llu", guiReference.ViewportClient->GetPickAttemptCount());
+			ImGui::Text("Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
+			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
+			
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("Draw Calls / Culling");
+			ImGui::PopStyleColor();
+			ImGui::Text("GPU call Count: %llu", guiReference.GraphicsManager->GetRenderer()->GetDrawCallCount());
+			ImGui::Text("Drawn Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetDrawnObjCount());
+			ImGui::Text("Culled Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetCulledObjCount());
+			
+			ImGui::PopStyleColor();
+			ImGui::PopFont();
+			ImGui::End();
+		}
 	}
 
 #if IS_OBJ_VIEWER
@@ -1345,36 +1392,57 @@ void FSceneManager::LoadScene(FCamera* Camera, const std::filesystem::path& scen
 	{
 		throw std::runtime_error(std::format("Scene file '{}' does not contain valid NextUUID data.", scenePath.string()));
 	}
-
-	if (!sceneJson.hasKey("World") || sceneJson.at("World").JSONType() != json::JSON::Class::Object)
+		
+	if (sceneJson.hasKey("World"))
 	{
-		throw std::runtime_error(std::format("Scene file '{}' does not contain valid World data.", scenePath.string()));
+		const uint32 nextUUID = sceneJson.at("NextUUID").ToInt();
+		UEngineStatics::SetNextUUID(nextUUID);
+		
+		const json::JSON worldJson = sceneJson.at("World");
+		
+		UWorld* newWorld = FObjectFactory::LoadObject<UWorld>(worldJson);
+		json::JSON PerspectiveCameraJson = sceneJson.at("PerspectiveCamera");
+		Camera->Transform.Location = JsonUtils::FromJson<FVector>(PerspectiveCameraJson.at("Location"));
+		Camera->Transform.Rotation = JsonUtils::FromJson<FRotator>(PerspectiveCameraJson.at("Rotation"));
+		Camera->mFovDegree = PerspectiveCameraJson.at("FOV").ToFloat();
+		Camera->mNear = PerspectiveCameraJson.at("Near").ToFloat();
+		Camera->mFar = PerspectiveCameraJson.at("Far").ToFloat();
+		
+		if (newWorld == nullptr)
+		{
+			throw std::runtime_error(std::format("Failed to deserialize world from '{}'.", scenePath.string()));
+		}
+
+		// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
+		FObjectFactory::DestroyObject(mCurrentWorld);
+		mCurrentWorld = newWorld;
+		
+		ResetSelectedActor();
+
 	}
+	else if (sceneJson.hasKey("Primitives"))
+	{
+		uint32 nextUUID = 0;
+		UWorld* newWorld = FSceneConverter::BuildWorldFromJson(sceneJson, nextUUID);
+		
+		FSceneConverter::ApplyCamera(sceneJson, Camera);
+		UEngineStatics::SetNextUUID(nextUUID);
 
-	const uint32 nextUUID = sceneJson.at("NextUUID").ToInt();
-	UEngineStatics::SetNextUUID(nextUUID);
-
-	const json::JSON worldJson = sceneJson.at("World");
-
-	UWorld* newWorld = FObjectFactory::LoadObject<UWorld>(worldJson);
-
-	json::JSON PerspectiveCameraJson = sceneJson.at("PerspectiveCamera");
-	Camera->Transform.Location = JsonUtils::FromJson<FVector>(PerspectiveCameraJson.at("Location"));
-	Camera->Transform.Rotation = JsonUtils::FromJson<FRotator>(PerspectiveCameraJson.at("Rotation"));
-	Camera->mFovDegree = PerspectiveCameraJson.at("FOV").ToFloat();
-	Camera->mNear = PerspectiveCameraJson.at("Near").ToFloat();
-	Camera->mFar = PerspectiveCameraJson.at("Far").ToFloat();
-
-	if (newWorld == nullptr)
+		if (newWorld == nullptr)
+		{
+			throw std::runtime_error(std::format("Failed to deserialize world from '{}'.", scenePath.string()));
+		}
+		
+		// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
+		FObjectFactory::DestroyObject(mCurrentWorld);
+		mCurrentWorld = newWorld;
+		
+		ResetSelectedActor();
+	}
+	else
 	{
 		throw std::runtime_error(std::format("Failed to deserialize world from '{}'.", scenePath.string()));
 	}
-
-	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
-	FObjectFactory::DestroyObject(mCurrentWorld);
-	mCurrentWorld = newWorld;
-
-	ResetSelectedActor();
 }
 
 void  FSceneManager::SetSelectedActor(AActor* actor)
@@ -1405,35 +1473,3 @@ const TArray<FRenderInfo> FSceneManager::GetAxisRenderInfos()
 	// TODO: Implement axis render info retrieval logic
 	return TArray<FRenderInfo>();
 }
-
-
-//
-//FSceneData FSceneManager::ReadSceneData(
-//	std::string_view sceneName,
-//	const FFileManager& fileManager)
-//{
-//	FString fileName = sceneName;
-//	fileName += kSceneDataSuffix;
-//
-//	json::JSON jsonData = json::JSON::Load(fileManager.ReadFileToString(fileName));
-//	FSceneData sceneData = FSceneData(jsonData);
-//	return sceneData;
-//}
-//
-//UWorld* FSceneManager::BuildWorldFromSceneData(const FSceneData& sceneData)
-//{
-//	//UWorld* newWorld = FObjectFactory::ConstructObject<UWorld>();
-//
-//	//for (const auto& [UUID, primitiveData] : sceneData.Primitives) 
-//	//{
-//	//	// TODO: Replace AActor creation logic later
-//	//	AActor* newActor = FObjectFactory::ConstructObject<AActor>();
-//	//	UPrimitiveComponent* newPrimitiveComponent =
-//	//		FObjectFactory::ConstructObject<UPrimitiveComponent>(
-//	//			);
-//	//}
-//
-//	//UEngineStatics::SetNextUUID(sceneData.NextUUID);
-//	throw std::logic_error("BuildWorldFromSceneData is not implemented yet.");
-//	return nullptr;
-//}

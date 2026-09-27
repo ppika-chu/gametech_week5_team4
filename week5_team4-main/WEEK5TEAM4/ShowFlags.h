@@ -65,7 +65,8 @@ private:
 	FShowFlags() = default;
 
 	static constexpr EShowFlag DEFAULT_FLAGS =
-		EShowFlag::WorldAxis | EShowFlag::UUIDText | EShowFlag::Grid | EShowFlag::Primitive;
+		EShowFlag::WorldAxis | EShowFlag::Grid | EShowFlag::Primitive;
+		// EShowFlag::WorldAxis | EShowFlag::UUIDText | EShowFlag::Grid | EShowFlag::Primitive;
 
 	uint64 mFlags = static_cast<uint64>(DEFAULT_FLAGS);
 };
