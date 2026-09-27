@@ -27,6 +27,7 @@
 #include "UStaticMeshComponent.h"
 #include "Serializers.h"
 #include "NativeFileDialog.h"
+#include "EngineMathLibrary.h"
 
 #if IS_OBJ_VIEWER
 #include "FObjViewer.h"
@@ -250,6 +251,10 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		FMatrix ViewProjection = Camera.GetViewMatrix() * Camera.GetUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio);
 		FMatrix InvViewProjection = Camera.GetInverseUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio) * Camera.GetViewMatrix().AffineInverse();
+
+		// Frustum 저장
+		const FFrustum ViewFrustum = FFrustum::FromViewProjection(ViewProjection);
+		RenderCollector.Frustum = &ViewFrustum;
 
 		mSceneManager->Render(deltaTime, RenderCollector);
 

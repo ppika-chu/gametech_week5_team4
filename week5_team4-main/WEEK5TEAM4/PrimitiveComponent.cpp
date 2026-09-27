@@ -63,6 +63,12 @@ void UPrimitiveComponent::Render(FRenderCollector& RenderCollector)
 
 void UPrimitiveComponent::RegisterPickTarget(FRenderCollector& RenderCollector)
 {
+	// Picking 후보에 넣기 전 Frustum 안에 있는지 확인
+	if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(GetBoundingBox()))
+	{
+		return;
+	}
+
 	RenderCollector.PickTargets.Add(this);
 }
 

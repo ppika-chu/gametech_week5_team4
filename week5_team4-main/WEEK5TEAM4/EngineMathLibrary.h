@@ -5,6 +5,7 @@
 #include "FQuaternion.h"
 #include "MathUtility.h"
 #include <functional>
+#include "FAABB.h"
 
 template <typename T>
 inline T Map(T Value, T InMin, T InMax, T OutMin, T OutMax)
@@ -258,3 +259,54 @@ inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB
 	return true;
 }
 
+struct FFrustum
+{
+	// Left, Right, Bottom, Top, Near, Far
+	FVector4 Planes[6];
+
+	// Frustum 각 평면의 A,B,C,D 저장
+	static FFrustum FromViewProjection(const FMatrix& VP)
+	{
+		// VP 행렬에서 k열 반환
+		auto Col = [&VP](int32 k)
+		{
+			return FVector4(VP.M[0][k], VP.M[1][k], VP.M[2][k], VP.M[3][k]);
+		};
+
+		const FVector4 Col0 = Col(0);
+		const FVector4 Col1 = Col(1);
+		const FVector4 Col2 = Col(2);
+		const FVector4 Col3 = Col(3);
+
+		FFrustum F;
+		F.Planes[0] = Col0 + Col3;
+		F.Planes[1] = Col3 - Col0;
+		F.Planes[2] = Col1 + Col3;
+		F.Planes[3] = Col3 - Col1;
+		F.Planes[4] = Col2;			// -w 가 0 이므로 
+		F.Planes[0] = Col3 - Col2;
+
+		return F;
+	}
+
+	inline bool Intersects(const FAABB& AABB) const
+	{
+		// 각 축의 중심
+		const FVector Center = (AABB.Min + AABB.Max) * 0.5f;
+		// 각 축의 뻗어나가는 방향
+		const FVector Extent = (AABB.Max - AABB.Min) * 0.5f;
+
+		for (const FVector4& P : Planes)
+		{
+			const float Radius = fabsf(P.x) * Extent.x + fabsf(P.y) * Extent.y + fabsf(P.z) * Extent.z;
+			const float Dist = P.x * Center.x + P.y * Center.y + P.z * Center.z + P.w;
+
+			// 이 평면의 가장 유리한 꼭짓점조차 Frustum 바깥에 있으므로 false
+			if (Dist + Radius < 0.f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+};

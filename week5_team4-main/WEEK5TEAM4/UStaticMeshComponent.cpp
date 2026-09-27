@@ -7,6 +7,7 @@
 #include "JsonUtil.h"
 #include "EngineMathLibrary.h"
 #include "FLogManager.h"
+#include "EngineMathLibrary.h"
 
 void UStaticMeshComponent::Initialize(const FString& InAssetPathFileName, FVector Location,
     FRotator Rotation, FVector Scale)
@@ -84,7 +85,7 @@ void UStaticMeshComponent::DeserializeClass(const json::JSON& inJson)
 			break;
 		}
 
-		mUVOffsets[i] = UVOffsets[i];
+		mUVOffsets[i] = UVOffsets[i]; 
 	}
 }
 
@@ -97,6 +98,13 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
 
     if (!FShowFlags::Get().IsEnabled(EShowFlag::Primitive))
     {
+        return;
+    }
+
+    // Frustum Culling
+    if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(GetBoundingBox()))
+    {
+        ++RenderCollector.CulledObjectCount;
         return;
     }
 

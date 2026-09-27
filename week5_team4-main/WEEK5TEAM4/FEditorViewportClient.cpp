@@ -18,6 +18,7 @@
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
+#include "FBVH.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -104,6 +105,13 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
+	FBVH BVH;
+	BVH.Build(RenderCollector.PickTargets);
+
+	UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount);
+	NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
+
+	#if 0
 	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
 	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 	{
@@ -121,6 +129,7 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 			NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
 		}
 	}
+	#endif
 
 	const auto EndTime = std::chrono::high_resolution_clock::now();
 

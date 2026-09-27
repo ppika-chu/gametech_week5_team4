@@ -11,6 +11,7 @@
 #include "Json/json.hpp"
 #include "JsonUtil.h"
 #include "FTextBuilder.h"
+#include "EngineMathLibrary.h"
 
 class UPlaneComponent : public UPrimitiveComponent
 {
@@ -69,6 +70,15 @@ public:
 		{
 			return;
 		}
+
+		if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(GetBoundingBox()))
+		{
+			++RenderCollector.CulledObjectCount;
+			return;
+		}
+
+		// actor 당 한 번 count
+		++RenderCollector.DrawnObjectCount;
 
 		FTransform PivotTransform = GetTransformMatrix();
 
