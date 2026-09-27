@@ -1,0 +1,40 @@
+#pragma once
+#include "PrimitiveComponent.h"
+
+struct FFrustum;
+
+class FBVH
+{
+public:
+    // 트리 새로 짓는 메소드
+    void Build(const TArray<UPrimitiveComponent*>& Items);
+    void Clear();
+
+    // Frustum culling 용
+    void QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor) const;
+
+    // Picking 용 (Ray와 가장 가까운 Component 반환)
+    UPrimitiveComponent* QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const;
+
+private:
+    struct FEntry
+    {
+        UPrimitiveComponent* Component = nullptr;
+        FAABB Bounds;
+    };
+
+    struct FNode
+    {
+        FAABB Bounds;
+        int32 Left = -1;
+        int32 Right = -1;
+        TArray<UPrimitiveComponent*> Items;
+    };
+
+    int32 BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End);
+    
+    // TODO : 최적의 leaf size인지는 모름. Test 필요
+    static constexpr int32 LeafSize = 4;
+    TArray<FNode> Nodes;
+    int32 RootIndex = -1;
+};
