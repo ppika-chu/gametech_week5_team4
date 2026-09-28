@@ -378,6 +378,19 @@ TSharedPtr<FDepthStencil> URenderer::CreateDepthStencil(uint32 Width, uint32 Hei
 
 void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32 StencilRef) const
 {
+	ID3D11ShaderResourceView* CurrentSRV0 = Pipeline->ShaderResourceViews.Num() > 0
+		? Pipeline->ShaderResourceViews[0]
+		: nullptr;
+
+	bool bSameState =
+		LastBoundPipeline == Pipeline.get() &&
+		LastBoundViewMode == ViewModeIndex &&
+		LastBoundStencilRef == StencilRef &&
+		LastBoundSRV0 == CurrentSRV0;
+
+	// 직전 State와 동일하면 Binding pass
+	if (bSameState)	 return;
+
 	// RSSetState는 드로우 직전마다 갈아치워지므로 뷰 모드 선택은 여기서 해야 한다.
 	// 이 모드를 지원하지 않는 파이프라인(2D/기즈모)은 Lit 상태로 폴백된다.
 	DeviceContext->RSSetState(Pipeline->GetRasterizerState(ViewModeIndex));
@@ -421,6 +434,12 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32
 		ID3D11SamplerState* nullSampler = nullptr;
 		DeviceContext->PSSetSamplers(0, 1, &nullSampler);
 	}
+
+	// Caching
+	LastBoundPipeline = Pipeline.get();
+	LastBoundViewMode = ViewModeIndex;
+	LastBoundStencilRef = StencilRef;
+	LastBoundSRV0 = CurrentSRV0;
 }
 
 void URenderer::BindFrameBuffer()
@@ -582,12 +601,23 @@ void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeli
 {
 	BindPipeline(Pipeline, StencilRef);
 
-	UINT Offset = 0;
-	DeviceContext->IASetVertexBuffers(0, 1, RenderInfo.VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);
+	ID3D11Buffer* CurrentVB = RenderInfo.VertexBuffer.Get();
+	if (LastVertexBuffer != CurrentVB || LastVertexStride != Pipeline->Stride)
+	{
+		UINT Offset = 0;
+		DeviceContext->IASetVertexBuffers(0, 1, RenderInfo.VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);
+		LastVertexBuffer = CurrentVB;
+		LastVertexStride = Pipeline->Stride;
+	}	
 
 	if (RenderInfo.IndexBuffer)
 	{
-		DeviceContext->IASetIndexBuffer(RenderInfo.IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		ID3D11Buffer* CurrentIB = RenderInfo.IndexBuffer.Get();
+		if (LastIndexBuffer != CurrentIB)
+		{
+			DeviceContext->IASetIndexBuffer(RenderInfo.IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			LastIndexBuffer = CurrentIB;
+		}
 		DeviceContext->DrawIndexed(RenderInfo.IndexCount, RenderInfo.StartIndex, 0);
 	}
 	else
