@@ -218,7 +218,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	
 
 	mGraphicsManager->UpdateGpuRenderTime();
-	if (ConsoleWindow::Get().bShowStatRender)
+	if (ConsoleWindow::Get().bShowStatRender || ConsoleWindow::Get().bShowOptimization)
 	{
 		mGraphicsManager->BeginGpuRenderTimer();
 	}

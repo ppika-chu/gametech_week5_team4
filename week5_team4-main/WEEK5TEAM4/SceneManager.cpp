@@ -483,13 +483,38 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PushFont(nullptr, 20.0f);
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
 
+			// FPS
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("FPS");
 			ImGui::PopStyleColor();
 
 			ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
-			ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
+			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
+			// CPU / GPU
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("Bottleneck");
+			ImGui::PopStyleColor();
+
+			const float FrameTimeMs = guiReference.FrameTimer->GetFrameTimeMs() * 1000.0f;
+			const float GPUTimeMs = guiReference.GraphicsManager->GetGpuRenderTime();
+			const float CPUTimeMs = FrameTimeMs - GPUTimeMs;
+
+			ImGui::Text("Frame Time: %.2f ms", FrameTimeMs);
+			ImGui::Text("GPU Time: %.2f ms", GPUTimeMs);
+			ImGui::Text("CPU Time (est.): %.2f ms", CPUTimeMs);
+
+			if (FrameTimeMs > 0.f)
+			{
+				const float GPURatio = GPUTimeMs / FrameTimeMs;
+				const bool bGPUBound = GPURatio > 0.8f;
+
+				ImGui::TextColored(
+					bGPUBound? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+					"GPURatio: %.2f %", GPURatio);
+	
+			}
+			// Picking
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Picking");
 			ImGui::PopStyleColor();
@@ -499,6 +524,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::Text("Last Picking Time: %.2f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
 			
+			// Draw Calls / Culling
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Draw Calls / Culling");
 			ImGui::PopStyleColor();
