@@ -282,4 +282,4 @@ editor.ini
 
 !Assets/**
 !BuiltInAssets/**
-!Vendor/lib/**!BuiltInAssets/**
+!Vendor/lib/**
