@@ -37,8 +37,3 @@ void UActorComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const
 	// Todo: Do nothing, must override, some components may not call GetRenderInfos()
 	// assert(false);
 }
-
-void UActorComponent::RegisterPickTarget(FRenderCollector& RenderCollector)
-{
-	// 충돌체가 없는 컴포넌트는 픽킹 대상이 아니다.
-}

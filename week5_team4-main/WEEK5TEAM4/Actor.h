@@ -4,6 +4,7 @@
 #include "ActorComponent.h"
 
 class UWorld;
+class UPrimitiveComponent;
 struct FRenderInfo;
 struct FTransform;
 class USceneComponent;
@@ -41,7 +42,11 @@ public:
 	void SetRotation(FRotator rotation);
 	void SetScale(FVector scale);
 
+	void NotifyPrimitiveBoundsChanged(UPrimitiveComponent* Component);
+
 private:
+	friend class UWorld;
+	void SetWorld(UWorld* World);
 	int32 getComponentIndex(int32 componentUUID) const;
 
 private:
@@ -50,6 +55,7 @@ private:
 	TArray<UActorComponent*> mComponents;
 	bool mbPressed = false;
 	bool mbStarted = false;
+	UWorld* mWorld = nullptr;
 };
 
 inline const FVector Up = FVector(0, 0, 1);

@@ -179,6 +179,7 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 		mMeshAsset = nullptr;
 		mMaterialAssets.Empty();
 		mUVOffsets.Empty();
+		NotifyBoundsChanged();
 		return;
     }
 
@@ -191,4 +192,5 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
         mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(Section.MaterialAssetID, true);
     }
     mMeshAsset = InMesh;
+	NotifyBoundsChanged();
 }

@@ -30,6 +30,9 @@ public:
 
 	FTransform GetTransformMatrix() const;
 
+protected:
+	virtual void OnTransformChanged() {}
+
 private:
 	FVector mRelativeLocation;
 	FRotator mRelativeRotation;

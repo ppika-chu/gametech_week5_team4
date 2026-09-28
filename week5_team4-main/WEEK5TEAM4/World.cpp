@@ -6,11 +6,13 @@
 #include "JsonUtil.h"
 #include "Console.h"
 #include "ObjectFactory.h"
+#include "PrimitiveComponent.h"
 
 UWorld::~UWorld()
 {
 	for (AActor* removeActor : mActors)
 	{
+		removeActor->SetWorld(nullptr);
 		FObjectFactory::DestroyObject(removeActor);
 	}
 }
@@ -67,9 +69,11 @@ void UWorld::AddActor(AActor* actor)
 	assert(getActorIndex(actor->UUID) == -1);
 
 	mActors.Add(actor);
+	actor->SetWorld(this);
 
 	// TODO: 전처리를 통해 에디터 모드가 아니면 아래 코드를 컴파일하지 않게 막아야함.
 	actor->CreateEditorComponents();
+	RequestBVHRebuild();
 }
 
 bool UWorld::RemoveActor(uint32 componentUUID)
@@ -80,8 +84,12 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 		return false;
 	}
 
+	AActor* Actor = mActors[componentIndex];
+	Actor->SetWorld(nullptr);
+
 	//mActors.RemoveAt(componentIndex, 1);
 	mActors.RemoveAtSwap(componentIndex);
+	RequestBVHRebuild();
 
 	return true;
 }
@@ -92,19 +100,132 @@ void UWorld::Tick(float deltaTime)
 	{
 		actor->Tick(deltaTime);
 	}
+
+	// 씬 구성 변경으로 인한 최초 Build는 피킹 시간에 포함시키지 않는다.
+	// 이동한 오브젝트의 refit은 실제 피킹 직전에만 수행한다.
+	if (bBVHRebuildPending)
+	{
+		RebuildBVH();
+	}
 }
 
 void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 {
 	// 쿼드/라인 정보는 Render()가 그린 뒤 스스로 비운다. 월드 바깥(엔진 루프의 AABB 디버그 라인 등)에서도
-	// 채워지므로 여기서 Reset 하면 남의 것까지 날린다. 메시/픽킹 배열만 여기서 갈아끼운다.
+	// 채워지므로 여기서 Reset 하면 남의 것까지 날린다. 메시 배열만 여기서 갈아끼운다.
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);
-	outCollector.PickTargets.Reset(DEFAULT_RESERVE_MEM);
 
 	for (AActor* actor : mActors)
 	{
 		actor->Render(outCollector);
 	}
+}
+
+UPrimitiveComponent* UWorld::RayCastBVH(const FPickingRay& Ray, uint64& OutTestCount)
+{
+	OutTestCount = 0;
+	FlushBVHUpdates();
+
+	TArray<FBVHRayHit> Candidates;
+	BVH.QueryRay(Ray, Candidates);
+
+	UPrimitiveComponent* NearestComponent = nullptr;
+	float NearestT = FLT_MAX;
+	for (const FBVHRayHit& Candidate : Candidates)
+	{
+		// 후보는 AABB 진입 거리순이다. 이미 찾은 삼각형보다 뒤에서 시작하면
+		// 이후 후보 역시 더 가까운 결과가 될 수 없다.
+		if (NearestComponent && Candidate.EntryDistance > NearestT * Ray.Length)
+		{
+			break;
+		}
+
+		++OutTestCount;
+		float HitT = FLT_MAX;
+		if (Candidate.Component->RayCastComponent(Ray, HitT) && HitT < NearestT)
+		{
+			NearestT = HitT;
+			NearestComponent = Candidate.Component;
+		}
+	}
+
+	return NearestComponent;
+}
+
+void UWorld::RequestBVHRebuild()
+{
+	bBVHRebuildPending = true;
+	BVHBoundsUpdatePending.clear();
+}
+
+void UWorld::RequestBVHBoundsUpdate(UPrimitiveComponent* Component)
+{
+	if (!bBVHRebuildPending && Component)
+	{
+		BVHBoundsUpdatePending.insert(Component);
+	}
+}
+
+void UWorld::RebuildBVH()
+{
+	TArray<UPrimitiveComponent*> Components;
+	Components.Reserve(mActors.Num());
+	for (AActor* Actor : mActors)
+	{
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			{
+				Components.Add(Primitive);
+			}
+		}
+	}
+
+	BVH.Build(Components);
+	BVHBoundsUpdatePending.clear();
+	bBVHRebuildPending = false;
+}
+
+void UWorld::FlushBVHUpdates()
+{
+	if (bBVHRebuildPending)
+	{
+		RebuildBVH();
+		return;
+	}
+
+	if (BVHBoundsUpdatePending.empty())
+	{
+		return;
+	}
+
+	// Set이 동일 컴포넌트의 위치/회전/스케일 변경을 하나로 합친다.
+	const bool bRefitAll = BVHBoundsUpdatePending.size() >= 128;
+	for (UPrimitiveComponent* Component : BVHBoundsUpdatePending)
+	{
+		if (!Component)
+		{
+			continue;
+		}
+
+		const FAABB Bounds = Component->GetBoundingBox();
+		const bool bUpdated = bRefitAll
+			? BVH.SetLeafBounds(Component, Bounds)
+			: BVH.UpdateLeafAndRefit(Component, Bounds);
+
+		if (!bUpdated)
+		{
+			RequestBVHRebuild();
+			RebuildBVH();
+			return;
+		}
+	}
+
+	if (bRefitAll)
+	{
+		BVH.RefitAll();
+	}
+	BVHBoundsUpdatePending.clear();
 }
 
 int32 UWorld::getActorIndex(uint32 actorUUID) const

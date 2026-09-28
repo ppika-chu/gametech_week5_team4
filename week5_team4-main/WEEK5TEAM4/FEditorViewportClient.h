@@ -76,10 +76,9 @@ struct FEditorViewportClient
 public:
 	FEditorViewportClient(URenderer& InRenderer);
 
-	// 이번 프레임에 수집된 픽킹 대상(RenderCollector.PickTargets)만 훑는다.
-	// 월드의 액터 계층을 다시 내려가지 않는다.
+	// 월드가 보유한 BVH에서 광선과 겹치는 후보만 검사한다.
 	// 광선은 ImGui 뷰포트 이미지 기준으로 만든다. 렌더러의 D3D11_VIEWPORT(백버퍼 전체)가 아니다.
-	AActor* PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector);
+	AActor* PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, UWorld& World);
 	float GetFov() const { return mCamera.mFovDegree; }
 	void Update(float deltaTime, float perspectiveRatio, FRenderCollector& RenderCollector);
 

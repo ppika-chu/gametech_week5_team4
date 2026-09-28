@@ -1,7 +1,10 @@
 ﻿#pragma once
 
+#include <unordered_set>
+
 #include "Object.h"
 #include "Actor.h"
+#include "BVH.h"
 
 #include "RenderInfo.h"
 //struct FRenderInfo;
@@ -24,11 +27,16 @@ public:
 
 	void Tick(float deltaTime);
 	void Render(float deltaTime, FRenderCollector& outCollector);
-	//void Render();
+
+	UPrimitiveComponent* RayCastBVH(const FPickingRay& Ray, uint64& OutTestCount);
+	void RequestBVHRebuild();
+	void RequestBVHBoundsUpdate(UPrimitiveComponent* Component);
 
 
 private:
 	int32 getActorIndex(uint32 actorUUID) const;
+	void RebuildBVH();
+	void FlushBVHUpdates();
 
 private:
 	enum
@@ -38,6 +46,9 @@ private:
 	
 	// Todo: Must reserve
 	TArray<AActor*> mActors;
+	FBVH BVH;
+	std::unordered_set<UPrimitiveComponent*> BVHBoundsUpdatePending;
+	bool bBVHRebuildPending = true;
 
 
 

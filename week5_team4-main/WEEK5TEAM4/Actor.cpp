@@ -4,6 +4,8 @@
 #include "SceneComponent.h"
 #include "UTextComponent.h"
 #include "ObjectFactory.h"
+#include "PrimitiveComponent.h"
+#include "World.h"
 #include <format>
 
 AActor::~AActor()
@@ -100,6 +102,11 @@ void AActor::AddComponent(UActorComponent* actorComponent)
 
 	mComponents.Add(actorComponent);
 	actorComponent->SetOwner(this);
+
+	if (mWorld && actorComponent->IsA<UPrimitiveComponent>())
+	{
+		mWorld->RequestBVHRebuild();
+	}
 }
 
 void AActor::AddRootSceneComponent(USceneComponent* sceneComponent)
@@ -122,6 +129,11 @@ bool AActor::RemoveComponent(uint32 componentUUID)
 	if (componentIndex == -1)
 	{
 		return false;
+	}
+
+	if (mWorld && mComponents[componentIndex]->IsA<UPrimitiveComponent>())
+	{
+		mWorld->RequestBVHRebuild();
 	}
 
 	//mComponents.RemoveAt(componentIndex, 1);
@@ -168,10 +180,6 @@ void AActor::Render(FRenderCollector& RenderCollector)
 	for (UActorComponent* component : mComponents)
 	{
 		component->Render(RenderCollector);
-
-		// 렌더 정보를 모으는 김에 픽킹 대상도 같이 모은다.
-		// 액터 계층을 두 번 훑지 않기 위함이다.
-		component->RegisterPickTarget(RenderCollector);
 	}
 }
 
@@ -221,6 +229,19 @@ void AActor::SetScale(FVector scale)
 	if (mRootComponent)
 	{
 		mRootComponent->SetRelativeScale3D(scale);
+	}
+}
+
+void AActor::SetWorld(UWorld* World)
+{
+	mWorld = World;
+}
+
+void AActor::NotifyPrimitiveBoundsChanged(UPrimitiveComponent* Component)
+{
+	if (mWorld)
+	{
+		mWorld->RequestBVHBoundsUpdate(Component);
 	}
 }
 

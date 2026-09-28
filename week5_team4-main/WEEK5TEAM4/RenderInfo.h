@@ -75,7 +75,6 @@ public:
 
 	TArray<FRenderInfo>     RenderInfos;   // 메시 패스
 	TArray<FRenderLineInfo> LineInfos;     // 라인 패스
-	TArray<UPrimitiveComponent*> PickTargets;
 
 	FFrustum Frustum;
 	bool bHasViewFrustum = true;
@@ -116,7 +115,6 @@ public:
 	{
 		RenderInfos.Empty();
 		LineInfos.Empty();
-		PickTargets.Empty();
 		OpaqueQuadInfos.Empty();
 		TransparentQuadInfos.Empty();
 		OverlayQuadInfos.Empty();

@@ -61,11 +61,6 @@ void UPrimitiveComponent::Render(FRenderCollector& RenderCollector)
 {
 }
 
-void UPrimitiveComponent::RegisterPickTarget(FRenderCollector& RenderCollector)
-{
-	RenderCollector.PickTargets.Add(this);
-}
-
 FAABB UPrimitiveComponent::GetBoundingBox() const
 {
 	return FAABB();
@@ -131,6 +126,19 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 	}
 
 	return bHit;
+}
+
+void UPrimitiveComponent::OnTransformChanged()
+{
+	NotifyBoundsChanged();
+}
+
+void UPrimitiveComponent::NotifyBoundsChanged()
+{
+	if (mOwner)
+	{
+		mOwner->NotifyPrimitiveBoundsChanged(this);
+	}
 }
 
 

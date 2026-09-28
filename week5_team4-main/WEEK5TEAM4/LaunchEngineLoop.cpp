@@ -266,7 +266,10 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && bIsAssetDragging)
 		{
-			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector);
+			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(
+				CurrentViewport->Window->Rect,
+				CurrentRatio,
+				*mSceneManager->GetCurrentWorld());
 			if (HitActor)
 			{
 				mSceneManager->SetSelectedActor(HitActor);

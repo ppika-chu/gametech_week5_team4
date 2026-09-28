@@ -65,7 +65,15 @@ FVector USceneComponent::GetRelativeLocation() const
 
 void USceneComponent::SetRelativeLocation(FVector location)
 {
+	if (mRelativeLocation.x == location.x
+		&& mRelativeLocation.y == location.y
+		&& mRelativeLocation.z == location.z)
+	{
+		return;
+	}
+
 	mRelativeLocation = location;
+	OnTransformChanged();
 }
 
 FRotator USceneComponent::GetRelativeRotation() const
@@ -75,7 +83,15 @@ FRotator USceneComponent::GetRelativeRotation() const
 
 void USceneComponent::SetRelativeRotation(FRotator rotation)
 {
+	if (mRelativeRotation.Pitch == rotation.Pitch
+		&& mRelativeRotation.Yaw == rotation.Yaw
+		&& mRelativeRotation.Roll == rotation.Roll)
+	{
+		return;
+	}
+
 	mRelativeRotation = rotation;
+	OnTransformChanged();
 }
 
 FVector USceneComponent::GetRelativeScale3D() const
@@ -85,7 +101,15 @@ FVector USceneComponent::GetRelativeScale3D() const
 
 void USceneComponent::SetRelativeScale3D(FVector scale)
 {
+	if (mRelativeScale3D.x == scale.x
+		&& mRelativeScale3D.y == scale.y
+		&& mRelativeScale3D.z == scale.z)
+	{
+		return;
+	}
+
 	mRelativeScale3D = scale;
+	OnTransformChanged();
 }
 
 FTransform USceneComponent::GetTransformMatrix() const

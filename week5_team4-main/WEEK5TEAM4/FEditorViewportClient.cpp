@@ -71,7 +71,7 @@ void FEditorViewportClient::SetViewportType(EViewportType InViewportType)
 	}
 }
 
-AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector)
+AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, UWorld& World)
 {
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
@@ -100,27 +100,12 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	mRayNear = NearPoint;
 	mRayFar = FarPoint;
 
-	float NearlistT = FLT_MAX;
-	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
-	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
-	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
-	{
-		// 충돌 검사할 때마다 +1
-		++PickTestCount;
-		float HitT = FLT_MAX;
-		if (!PickTarget->RayCastComponent(PickingRay, HitT))
-		{
-			continue;
-		}
-
-		if (HitT < NearlistT)
-		{
-			NearlistT = HitT;
-			NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
-		}
-	}
+	uint64 TestCount = 0;
+	UPrimitiveComponent* NearestComponent = World.RayCastBVH(PickingRay, TestCount);
+	PickTestCount += TestCount;
+	AActor* NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
 
 	const auto EndTime = std::chrono::high_resolution_clock::now();
 
