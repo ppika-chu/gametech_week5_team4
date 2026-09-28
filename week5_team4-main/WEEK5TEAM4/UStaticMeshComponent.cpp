@@ -144,7 +144,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
-        RenderInfo.Model = GetTransformMatrix().MakeMatrix();
+        RenderInfo.Model = GetCachedWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
@@ -161,6 +161,25 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
     }
 
     return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
+}
+
+void UStaticMeshComponent::UpdateWorldCache()
+{
+    mCachedWorldMatrix = GetTransformMatrix().MakeMatrix();
+    if (mMeshAsset)
+    {
+        mCachedWorldBounds = mMeshAsset->GetLocalBoundingBox().ToWorld(mCachedWorldMatrix);
+    }
+}
+
+const FMatrix& UStaticMeshComponent::GetCachedWorldMatrix() const
+{
+    return (mCachedWorldMatrix);
+}
+
+const FAABB& UStaticMeshComponent::GetCachedWorldBounds() const
+{
+    return (mCachedWorldBounds);
 }
 
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)

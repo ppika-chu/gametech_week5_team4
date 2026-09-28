@@ -59,7 +59,10 @@ void	FBVH::Refit()
 {
 	for (FBVHPrimitive& Primitive : Primitives)
 	{
-		Primitive.WorldAABB = Primitive.StaticMeshComponent->GetBoundingBox();
+		Primitive.StaticMeshComponent->UpdateWorldCache();
+		Primitive.WorldAABB = Primitive.StaticMeshComponent->GetCachedWorldBounds();
+
+
 		Primitive.Centroid = (Primitive.WorldAABB.Min + Primitive.WorldAABB.Max) * 0.5f;
 	}
 
@@ -152,7 +155,9 @@ void	FBVH::CollectPrimitives(const TArray<AActor*>& Actors)
 				continue;
 			FBVHPrimitive BVHPrimitive;
 			BVHPrimitive.StaticMeshComponent = StaticMeshComponent;
-			BVHPrimitive.WorldAABB = StaticMeshComponent->GetBoundingBox();
+			StaticMeshComponent->UpdateWorldCache();
+			BVHPrimitive.WorldAABB = StaticMeshComponent->GetCachedWorldBounds();
+
 			BVHPrimitive.Centroid = (BVHPrimitive.WorldAABB.Min + BVHPrimitive.WorldAABB.Max) * 0.5f;
 			Primitives.Add(BVHPrimitive);
 		}

@@ -58,6 +58,10 @@ public:
 	FVector2 GetUVOffset(int32 index) const { return mUVOffsets[index]; }
 	void SetUVOffset(int32 index, const FVector2& InUVOffset) { mUVOffsets[index] = InUVOffset; }
 
+	void UpdateWorldCache();
+	const FMatrix& GetCachedWorldMatrix() const;
+	const FAABB& GetCachedWorldBounds() const;
+
 	UStaticMesh* StaticMesh = nullptr;
 
 private:
@@ -66,4 +70,6 @@ private:
 	TArray<TSharedPtr<FMaterialAsset>> mMaterialAssets;
 	TSharedPtr<FTexture2DAsset> mTextureAsset;
 	TArray<FVector2> mUVOffsets;
+	FMatrix mCachedWorldMatrix = FMatrix::Identity;
+	FAABB   mCachedWorldBounds;
 };
