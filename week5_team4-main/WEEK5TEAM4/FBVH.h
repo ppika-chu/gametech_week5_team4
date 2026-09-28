@@ -1,5 +1,7 @@
 #pragma once
 #include "PrimitiveComponent.h"
+#include "TMap.h"
+#include <functional>
 
 struct FFrustum;
 
@@ -16,10 +18,10 @@ public:
     // Picking 용 (Ray와 가장 가까운 Component 반환)
     UPrimitiveComponent* QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const;
 
-    // 객체 스폰했을 때
-    void Remove(UPrimitiveComponent* Item);
-
     // 객체 삭제했을 때
+    void Remove(UPrimitiveComponent* Item);
+    
+    // 객체 스폰했을 때
     void Insert(UPrimitiveComponent* Item);
 
     // 기즈모로 이동했을 때 (Remove + Insert) 
@@ -46,6 +48,9 @@ private:
     void RefitUpward(int32 NodeIndex);
     void RecomputeNodeBounds(int32 NodeIndex);
     int32 FindBestLeaf(const FAABB& NewBounds) const;
+
+    int32 PartitionByLongestAxis(TArray<FEntry>& Entries, int32 Begin, int32 End);
+    void SplitLeaf(int32 LeafIndex);
 
     // TODO : 최적의 leaf size인지는 모름. Test 필요
     static constexpr int32 LeafSize = 4;

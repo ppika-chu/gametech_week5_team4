@@ -268,7 +268,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && bIsAssetDragging)
 		{
-			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector);
+			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector, mSceneManager->GetCurrentWorld()->GetBVH());
 			if (HitActor)
 			{
 				mSceneManager->SetSelectedActor(HitActor);
@@ -330,6 +330,15 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			mGraphicsManager->Render();
 
 			CurrentViewport->Client->mGizmo.Render(SelectedActor, CurrentViewport->Client->mCamera.Transform.Location, CurrentViewport->Window->Rect, ViewProjection, CurrentViewport->Client->IsOrtho(), CurrentViewport->Client->GetCamera().mOrthoDistance);
+		
+			if (SelectedActor && CurrentViewport->Client->mGizmo.IsDragging())
+			{
+				for (UActorComponent* Component : SelectedActor->GetComponents())
+				{
+					if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+						mSceneManager->GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 	}
 

@@ -72,7 +72,7 @@ void FEditorViewportClient::SetViewportType(EViewportType InViewportType)
 	}
 }
 
-AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector)
+AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector, FBVH& BVH)
 {
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
@@ -104,9 +104,6 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	float NearlistT = FLT_MAX;
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
-
-	FBVH BVH;
-	BVH.Build(RenderCollector.PickTargets);
 
 	UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount);
 	NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;

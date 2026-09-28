@@ -31,7 +31,7 @@ void UWorld::SerializeClass(json::JSON& outJson) const
 }
 
 void UWorld::DeserializeClass(const json::JSON& inJson)
-{
+{ 
 	UObject::DeserializeClass(inJson);
 
 	const json::JSON& propertiesJson = inJson.at("Properties");
@@ -59,6 +59,19 @@ void UWorld::DeserializeClass(const json::JSON& inJson)
 		AActor* actor = static_cast<AActor*>(FObjectFactory::LoadObject(classInfo, actorJson));
 		AddActor(actor);
 	}
+
+	TArray<UPrimitiveComponent*> AllPrimitives;
+	for (AActor* Actor : mActors)
+	{
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			{
+				AllPrimitives.Add(Primitive);
+			}
+		}
+	}
+	mBVH.Build(AllPrimitives);
 }
 
 void UWorld::AddActor(AActor* actor)
@@ -70,6 +83,12 @@ void UWorld::AddActor(AActor* actor)
 
 	// TODO: 전처리를 통해 에디터 모드가 아니면 아래 코드를 컴파일하지 않게 막아야함.
 	actor->CreateEditorComponents();
+
+	for (UActorComponent* Component : actor->GetComponents())
+	{
+		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			mBVH.Insert(Primitive);
+	}
 }
 
 bool UWorld::RemoveActor(uint32 componentUUID)
@@ -78,6 +97,13 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 	if (componentIndex == -1)
 	{
 		return false;
+	}
+
+	AActor* actor = mActors[componentIndex];
+	for (UActorComponent* Component : actor->GetComponents())
+	{
+		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			mBVH.Remove(Primitive);
 	}
 
 	//mActors.RemoveAt(componentIndex, 1);

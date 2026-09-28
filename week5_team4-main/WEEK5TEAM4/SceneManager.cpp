@@ -907,6 +907,13 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 		if (ImGui::DragFloat3("Translation", &translationInput.x, 0.1f))
 		{
 			mSelectedActor->SetLocation(translationInput);
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		if (ImGui::DragFloat3("Rotation", &rotationInput.x, 0.1f))
@@ -916,11 +923,26 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				rotationInput.z, // Yaw
 				rotationInput.x  // Roll
 				});
+
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		if (ImGui::DragFloat3("Scale", &scaleInput.x, 0.1f, MIN_SCALE, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp))
 		{
 			mSelectedActor->SetScale(scaleInput);
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		int componentIndex = 0;
