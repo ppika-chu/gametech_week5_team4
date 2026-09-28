@@ -3,10 +3,12 @@
 #include "Vector.h"
 #include "Matrix.h"
 #include "FAABB.h"
+#include "MathUtility.h"
 
 struct FPlane
 {
 	FVector	Normal;
+	FVector AbsoluteNormal;
 	float	Offset;
 	
 	FPlane() : Normal(FVector(0, 0, 0)), Offset(0) {}
@@ -23,6 +25,7 @@ struct FPlane
 		}
 		float InverseLength = 1 / Length;
 		Normal = FVector(Value.x * InverseLength, Value.y * InverseLength, Value.z * InverseLength);
+		AbsoluteNormal = FVector(FMath::Abs(Normal.x), FMath::Abs(Normal.y), FMath::Abs(Normal.z));
 		Offset = Value.w * InverseLength;
 	}
 
@@ -46,7 +49,7 @@ struct FFrustum
 		return (Faces[static_cast<int>(P)]);
 	}
 
-	bool CheckFrustumCulling(FAABB AABB)
+	bool CheckFrustumCulling(const FAABB& AABB) const
 	{
 		FVector Center;
 		FVector Extent;
@@ -57,9 +60,9 @@ struct FFrustum
 		for (int32 i = 0; i < static_cast<int32>(EPlane::Count); i++)
 		{
 			float Distance = Faces[i].SignedDistance(Center);
-			float R = (fabs(Faces[i].Normal.x) * Extent.x) + (fabs(Faces[i].Normal.y) * Extent.y) + (fabs(Faces[i].Normal.z) * Extent.z);
+			float ProjectedExtent = FVector::dot(Extent, Faces[i].AbsoluteNormal);
 
-			if (Distance < -R)
+			if (Distance < -ProjectedExtent)
 				return (true);
 		}
 		return (false);
@@ -77,21 +80,21 @@ struct FFrustum
 
 inline FFrustum createFrustumFromCamera(const FMatrix& Matrix)
 {
-	FFrustum     frustum;
+	FFrustum     Frustum;
 
-	const FVector4 C0 = FVector4(Matrix.M[0][0], Matrix.M[1][0], Matrix.M[2][0], Matrix.M[3][0]); // x
-	const FVector4 C1 = FVector4(Matrix.M[0][1], Matrix.M[1][1], Matrix.M[2][1], Matrix.M[3][1]); // y
-	const FVector4 C2 = FVector4(Matrix.M[0][2], Matrix.M[1][2], Matrix.M[2][2], Matrix.M[3][2]); // z
-	const FVector4 C3 = FVector4(Matrix.M[0][3], Matrix.M[1][3], Matrix.M[2][3], Matrix.M[3][3]); // w
+	const FVector4 ClipX = FVector4(Matrix.M[0][0], Matrix.M[1][0], Matrix.M[2][0], Matrix.M[3][0]); // x
+	const FVector4 ClipY = FVector4(Matrix.M[0][1], Matrix.M[1][1], Matrix.M[2][1], Matrix.M[3][1]); // y
+	const FVector4 ClipZ = FVector4(Matrix.M[0][2], Matrix.M[1][2], Matrix.M[2][2], Matrix.M[3][2]); // z
+	const FVector4 ClipW = FVector4(Matrix.M[0][3], Matrix.M[1][3], Matrix.M[2][3], Matrix.M[3][3]); // w
 
-	frustum[FFrustum::EPlane::Left] = FPlane(C3 + C0);
-	frustum[FFrustum::EPlane::Right] = FPlane(C3 - C0);
-	frustum[FFrustum::EPlane::Bottom] = FPlane(C3 + C1);
-	frustum[FFrustum::EPlane::Top] = FPlane(C3 - C1);
-	frustum[FFrustum::EPlane::Near] = FPlane(C2);
-	frustum[FFrustum::EPlane::Far] = FPlane(C3 - C2);
+	Frustum[FFrustum::EPlane::Left] = FPlane(ClipW + ClipX);
+	Frustum[FFrustum::EPlane::Right] = FPlane(ClipW - ClipX);
+	Frustum[FFrustum::EPlane::Bottom] = FPlane(ClipW + ClipY);
+	Frustum[FFrustum::EPlane::Top] = FPlane(ClipW - ClipY);
+	Frustum[FFrustum::EPlane::Near] = FPlane(ClipZ);
+	Frustum[FFrustum::EPlane::Far] = FPlane(ClipW - ClipZ);
 
-	return frustum;
+	return Frustum;
 }
 
 
