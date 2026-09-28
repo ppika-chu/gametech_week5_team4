@@ -27,10 +27,10 @@ void FBVH::Build(const TArray<UPrimitiveComponent*>& Items)
     }
 
     Nodes.Reserve(Entries.Num() * 2);
-    RootIndex = BuildRecursive(Entries, 0, Entries.Num());
+    RootIndex = BuildRecursive(Entries, 0, Entries.Num(), -1);
 }
 
-int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End)
+int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End, int32 ParentIndex)
 {
     FAABB Bounds = Entries[Begin].Bounds;
     for (int32 i = Begin + 1; i < End; ++i)
@@ -46,6 +46,7 @@ int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End)
     {
         FNode Node;
         Node.Bounds = Bounds;
+        Node.Parent = ParentIndex;
         for (int32 i = Begin; i< End; ++i)
         {
             Node.Items.Add(Entries[i].Component);
@@ -53,6 +54,12 @@ int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End)
 
         const int32 NodeIndex = Nodes.Num();
         Nodes.Add(Node);
+
+        for (int32 i = Begin; i < End; ++i)
+        {
+            ComponentToLeaf.Add(Entries[i].Component, NodeIndex);
+        }
+
         return NodeIndex;
     }
 
@@ -91,9 +98,10 @@ int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End)
     // Node 채우고 추가하기
     const int32 NodeIndex = Nodes.Num();
     Nodes.Add(FNode{}); 
+    Nodes[NodeIndex].Parent = ParentIndex;
 
-    const int32 LeftIndex = BuildRecursive(Entries, Begin, Mid);
-    const int32 RightIndex = BuildRecursive(Entries, Mid, End);
+    const int32 LeftIndex = BuildRecursive(Entries, Begin, Mid, NodeIndex);
+    const int32 RightIndex = BuildRecursive(Entries, Mid, End, NodeIndex);
 
     Nodes[NodeIndex].Bounds = Bounds;
     Nodes[NodeIndex].Left = LeftIndex;
@@ -177,4 +185,62 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
         }
     }
     return NearestComponent;
+}
+
+void FBVH::RefitUpward(int32 NodeIndex)
+{
+    FNode& Node = Nodes[NodeIndex];
+
+    // Leaf Node 일 경우
+    if (Node.Left < 0)
+    {
+        // Item 없을 경우 pass
+        if (Node.Items.Num() == 0) return;
+
+        // Item 있으면 첫번째 Item 기준으로 확장
+        FAABB& Bounds = Node.Items[0]->GetBoundingBox();
+        
+        for (int i = 1; i < Node.Items.Num(); i++)
+        {
+            Bounds.ExpandToInclude(Node.Items[i]->GetBoundingBox().Min);
+            Bounds.ExpandToInclude(Node.Items[i]->GetBoundingBox().Max);
+        }
+        Node.Bounds = Bounds;
+    }
+    else
+    {
+        FAABB& Bounds = Nodes[Node.Left].Items[0]->GetBoundingBox();
+        Bounds.ExpandToInclude
+        
+    }
+}
+
+// AABB 다시 계산
+void FBVH::RecomputeNodeBounds(int32 NodeIndex)
+{
+
+}
+
+// 최적의 Leaf 노드 찾기
+int32 FBVH::FindBestLeaf(const FAABB& NewBounds) const
+{
+
+}
+
+// 객체 스폰했을 때
+void FBVH::Remove(UPrimitiveComponent* Item)
+{
+
+}
+
+// 객체 삭제했을 때
+void FBVH::Insert(UPrimitiveComponent* Item)
+{
+
+}
+
+// 기즈모로 이동했을 때 (Remove + Insert) 
+void FBVH::Move(UPrimitiveComponent* Item)
+{
+
 }
