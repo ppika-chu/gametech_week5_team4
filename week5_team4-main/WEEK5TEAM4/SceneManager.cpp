@@ -496,6 +496,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			
 			ImGui::Text("Picking Count: %llu", guiReference.ViewportClient->GetPickAttemptCount());
 			ImGui::Text("Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
+			ImGui::Text("Last Picking Time: %.2f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
 			
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));

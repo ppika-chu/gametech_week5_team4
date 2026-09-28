@@ -124,6 +124,9 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 
 	const auto EndTime = std::chrono::high_resolution_clock::now();
 
+	// 이번 Picking에 소요된 시간(ms)
+	PickLastTimeMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
+
 	// 누적 시간 ( End - Start ) 기록
 	PickAccumulatedTimeMs += std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
 	return NearestActor;
