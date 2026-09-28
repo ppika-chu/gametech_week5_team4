@@ -251,6 +251,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		FMatrix ViewProjection = Camera.GetViewMatrix() * Camera.GetUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio);
 		FMatrix InvViewProjection = Camera.GetInverseUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio) * Camera.GetViewMatrix().AffineInverse();
 
+		// 절두체 컬링 처리
+		FFrustum Frustum = createFrustumFromCamera(ViewProjection);
+		RenderCollector.Frustum = Frustum;
+
+
+
 		mSceneManager->Render(deltaTime, RenderCollector);
 
 		// 마우스 피킹 처리

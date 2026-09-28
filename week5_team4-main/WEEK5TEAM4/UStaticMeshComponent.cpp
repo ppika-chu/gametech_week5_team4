@@ -100,6 +100,14 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+    //절두체 컬링 진행
+
+    if (RenderCollector.Frustum.CheckFrustumCulling(GetBoundingBox()))
+    {
+        ++RenderCollector.CulledObjectCount;
+        return;
+    }
+
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
