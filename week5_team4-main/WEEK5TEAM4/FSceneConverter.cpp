@@ -94,7 +94,7 @@ void FSceneConverter::ApplyCamera(const json::JSON& sceneJson, FCamera* camera)
     camera->Transform.Rotation = JsonUtils::FromJson<FRotator>(cameraJson.at("Rotation"));
     camera->mFovDegree = cameraJson.at("FOV").at(0).ToFloat();
     camera->mNear = cameraJson.at("NearClip").at(0).ToFloat();
-    camera->mFovDegree = cameraJson.at("FarClip").at(0).ToFloat();
+    camera->mFar = cameraJson.at("FarClip").at(0).ToFloat();
 
 }
 

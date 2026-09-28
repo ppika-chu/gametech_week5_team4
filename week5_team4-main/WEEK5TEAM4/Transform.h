@@ -19,9 +19,33 @@ struct FTransform
 	FRotator Rotation = FRotator(0, 0, 0);
 	FVector Scale = FVector(1);
 
-	FMatrix MakeMatrix() const
+	/*FMatrix MakeMatrix() const
 	{
 		return  FMatrix::Scale(Scale) * FMatrix::Rotate(Rotation) * FMatrix::Translation(Location);
+	}*/
+
+	FMatrix MakeMatrix() const
+	{
+		FMatrix result = FMatrix::Rotate(Rotation);
+
+		// (x, x, x, x) ... 
+		const __m128 ScaleX = _mm_set1_ps(Scale.x);
+		const __m128 ScaleY = _mm_set1_ps(Scale.y);
+		const __m128 ScaleZ = _mm_set1_ps(Scale.z);
+
+		const __m128 Row0 = _mm_load_ps(result.M[0]);
+		const __m128 Row1 = _mm_load_ps(result.M[1]);
+		const __m128 Row2 = _mm_load_ps(result.M[2]);
+
+		_mm_store_ps(result.M[0], _mm_mul_ps(Row0, ScaleX));
+		_mm_store_ps(result.M[1], _mm_mul_ps(Row1, ScaleY));
+		_mm_store_ps(result.M[2], _mm_mul_ps(Row2, ScaleZ));
+
+		const __m128 TranslationRow = _mm_set_ps(1.0f, Location.z, Location.y, Location.x);
+		_mm_store_ps(result.M[3], TranslationRow);
+
+		return result;
+
 	}
 
 	FMatrix InverseMatrix() const

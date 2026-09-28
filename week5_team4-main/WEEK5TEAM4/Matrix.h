@@ -5,8 +5,9 @@
 #include "Vector.h"
 #include "enum.h"
 #include <utility>
+#include <immintrin.h>
 
-struct FMatrix { 
+struct alignas(16) FMatrix {
 	float M[4][4];
 
 	static const FMatrix Identity;
@@ -44,7 +45,7 @@ struct FMatrix {
 		return R;
 	}
 
-	FMatrix operator* (const FMatrix& Other) const
+	/*FMatrix operator* (const FMatrix& Other) const
 	{
 		FMatrix result = {};
 
@@ -56,15 +57,61 @@ struct FMatrix {
 			}
 		}
 		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix operator* (const FMatrix& Other) const
+	{
+		FMatrix result = {};
+
+		__m128 otherRow0 = _mm_load_ps(Other.M[0]);
+		__m128 otherRow1 = _mm_load_ps(Other.M[1]);
+		__m128 otherRow2 = _mm_load_ps(Other.M[2]);
+		__m128 otherRow3 = _mm_load_ps(Other.M[3]);
+
+		for (int row = 0; row < 4; ++row)
+		{
+			const __m128 currentRow = _mm_load_ps(M[row]);
+
+			__m128 x = _mm_shuffle_ps(currentRow, currentRow, _MM_SHUFFLE(0, 0, 0, 0));
+			__m128 y = _mm_shuffle_ps(currentRow, currentRow, _MM_SHUFFLE(1, 1, 1, 1));
+			__m128 z = _mm_shuffle_ps(currentRow, currentRow, _MM_SHUFFLE(2, 2, 2, 2));
+			__m128 w = _mm_shuffle_ps(currentRow, currentRow, _MM_SHUFFLE(3, 3, 3, 3));
+
+			__m128 resultRow = _mm_mul_ps(x, otherRow0);
+			resultRow = _mm_add_ps(resultRow, _mm_mul_ps(y, otherRow1));
+			resultRow = _mm_add_ps(resultRow, _mm_mul_ps(z, otherRow2));
+			resultRow = _mm_add_ps(resultRow, _mm_mul_ps(w, otherRow3));
+
+			_mm_store_ps(result.M[row], resultRow);
+		}
+
+		return result;
 	}
 
-	FMatrix operator*(float Scalar) const
+	/*FMatrix operator*(float Scalar) const
 	{ 
 		FMatrix result;
 		for (int row = 0; row < 4; ++row) {
 			for (int col = 0; col < 4; ++col) {
 				result.M[row][col] = M[row][col] * Scalar;
 			}
+		}
+
+		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix operator*(float Scalar) const
+	{ 
+		FMatrix result;
+		__m128 scalar = _mm_set_ps(Scalar, Scalar, Scalar, Scalar);
+
+		for (int row = 0; row < 4; ++row) {
+			const __m128 currentRow = _mm_load_ps(M[row]);
+			__m128 resultRow = _mm_mul_ps(currentRow, scalar);
+
+			_mm_store_ps(result.M[row], resultRow);
 		}
 
 		return result;
@@ -157,7 +204,7 @@ struct FMatrix {
 		return true;
 	}
 
-	FMatrix Transpose() const
+	/*FMatrix Transpose() const
 	{ 
 		FMatrix result = {};
 		for (int row = 0; row < 4; ++row) {
@@ -165,6 +212,25 @@ struct FMatrix {
 				result.M[row][col] = M[col][row];
 			}
 		}
+		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix Transpose() const
+	{ 
+		FMatrix result = {};
+		__m128 rows[4];
+
+		for (int i = 0; i < 4; ++i) {
+			rows[i] = _mm_load_ps(M[i]);
+		}
+
+		_MM_TRANSPOSE4_PS(rows[0], rows[1], rows[2], rows[3]);
+
+		for (int i = 0; i < 4; ++i) {
+			_mm_store_ps(result.M[i], rows[i]);
+		}
+
 		return result;
 	}
 
@@ -401,14 +467,42 @@ struct FMatrix {
 };
 
 // 행벡터 규약: V * M. 투영 시 동차 좌표 w까지 유지한다.
-inline FVector4 operator*(const FVector4& V, const FMatrix& M)
+/*inline FVector4 operator*(const FVector4& V, const FMatrix& M)
 {
 	return FVector4(
 		V.x * M.M[0][0] + V.y * M.M[1][0] + V.z * M.M[2][0] + V.w * M.M[3][0],
 		V.x * M.M[0][1] + V.y * M.M[1][1] + V.z * M.M[2][1] + V.w * M.M[3][1],
 		V.x * M.M[0][2] + V.y * M.M[1][2] + V.z * M.M[2][2] + V.w * M.M[3][2],
 		V.x * M.M[0][3] + V.y * M.M[1][3] + V.z * M.M[2][3] + V.w * M.M[3][3]);
+}*/
+
+inline FVector4 operator*(const FVector4& V, const FMatrix& M)
+{
+	// V*M의 형태
+	
+	__m128 vec = _mm_loadu_ps(&V.x);
+
+	__m128 vX = _mm_shuffle_ps(vec, vec, 0x00); // (vx, vx, vx, vx)
+	__m128 vY = _mm_shuffle_ps(vec, vec, 0x55); // (vy, vy, vy, vy)
+	__m128 vZ = _mm_shuffle_ps(vec, vec, 0xAA); // (vz, vz, vz, vz)
+	__m128 vW = _mm_shuffle_ps(vec, vec, 0xFF); // (vw, vw, vw, vw)
+
+	__m128 row0 = _mm_load_ps(M.M[0]);
+	__m128 row1 = _mm_load_ps(M.M[1]);
+	__m128 row2 = _mm_load_ps(M.M[2]);
+	__m128 row3 = _mm_load_ps(M.M[3]);
+
+	__m128 r = _mm_mul_ps(vX, row0);
+	r = _mm_add_ps(r, _mm_mul_ps(vY, row1));
+	r = _mm_add_ps(r, _mm_mul_ps(vZ, row2));
+	r = _mm_add_ps(r, _mm_mul_ps(vW, row3));
+
+	FVector4 result;
+
+	_mm_storeu_ps(&result.x, r);
+	return result;
 }
+
 
 inline const FMatrix FMatrix::Identity = {
 	FVector4(1, 0, 0, 0),
