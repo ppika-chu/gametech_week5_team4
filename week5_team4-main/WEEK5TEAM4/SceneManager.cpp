@@ -487,8 +487,14 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("FPS");
 			ImGui::PopStyleColor();
+			
+			const float FrameTimeMs = guiReference.FrameTimer->GetFrameTimeMs();
+			const float GPUTimeMs = guiReference.GraphicsManager->GetGpuRenderTime();
+			float TrueFrameTimeMs = max(FrameTimeMs, GPUTimeMs);
+			float TrueFPS = TrueFrameTimeMs > 0.f ? 1000.0f / TrueFrameTimeMs : 0.f;
+			const float CPUTimeMs = TrueFrameTimeMs - GPUTimeMs;
 
-			ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
+			ImGui::Text("FPS: %.1f", TrueFPS);
 			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
 			// CPU / GPU
@@ -496,22 +502,18 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::SeparatorText("Bottleneck");
 			ImGui::PopStyleColor();
 
-			const float FrameTimeMs = guiReference.FrameTimer->GetFrameTimeMs() * 1000.0f;
-			const float GPUTimeMs = guiReference.GraphicsManager->GetGpuRenderTime();
-			const float CPUTimeMs = FrameTimeMs - GPUTimeMs;
-
-			ImGui::Text("Frame Time: %.2f ms", FrameTimeMs);
+			ImGui::Text("Frame Time: %.2f ms", TrueFrameTimeMs);
 			ImGui::Text("GPU Time: %.2f ms", GPUTimeMs);
 			ImGui::Text("CPU Time (est.): %.2f ms", CPUTimeMs);
 
-			if (FrameTimeMs > 0.f)
+			if (TrueFrameTimeMs > 0.f)
 			{
-				const float GPURatio = GPUTimeMs / FrameTimeMs;
+				const float GPURatio = GPUTimeMs / TrueFrameTimeMs;
 				const bool bGPUBound = GPURatio > 0.8f;
 
 				ImGui::TextColored(
 					bGPUBound? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
-					"GPURatio: %.2f %", GPURatio);
+					"GPU Ratio: %.2f %%", GPURatio*100.0f);
 	
 			}
 			// Picking
@@ -544,7 +546,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 #else
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
-	updateObjectListPanelGUI(guiReference);
+	// updateObjectListPanelGUI(guiReference);
 	ConsoleWindow::Get().Process(mBottomBarHeight);
 	mContentBrowser.SetAssetManager(guiReference.AssetManager);
 	mContentBrowser.Render(mBottomBarHeight);
