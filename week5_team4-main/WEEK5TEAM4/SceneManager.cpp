@@ -407,7 +407,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 				ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.35f, 1.0f), "FPS");
 				ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
-				ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
+				ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetFrameTimeMs());
 			}
 
 			if (console.bShowStatMemory)
@@ -488,7 +488,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PopStyleColor();
 
 			ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
-			ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
+			ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetFrameTimeMs());
 			
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Picking");

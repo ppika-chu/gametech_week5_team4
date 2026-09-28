@@ -30,6 +30,7 @@ public:
 	}
 
 	float GetDeltaTime() const { return deltaTime; }
+	float GetFrameTimeMs() const { return static_cast<float>(elapsedTime); }
 	float GetFPS() const { return elapsedTime > 0.0 ? (float)(1000.0 / elapsedTime) : 0.f; }
 
 private:
