@@ -172,49 +172,128 @@ typedef struct FVector4
 	FVector4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
 	FVector4(const FVector3& v, float _w) : x(v.x), y(v.y), z(v.z), w(_w) {}
 
-	FVector4 operator+(const FVector4& Others) const
+	/*FVector4 operator+(const FVector4& Others) const
 	{
 		return FVector4(x + Others.x, y + Others.y, z + Others.z, w + Others.w);
+	}*/
+
+	FVector4 operator+(const FVector4& Others) const
+	{
+		FVector4 result = {};
+
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 other = _mm_loadu_ps(&Others.x);
+		__m128 sum = _mm_add_ps(current, other);
+
+		_mm_storeu_ps(&result.x, sum);
+		return result;
 	}
 
-	FVector4 operator-(const FVector4& Others) const
+	/*FVector4 operator-(const FVector4& Others) const
 	{
 		return FVector4(x - Others.x, y - Others.y, z - Others.z, w - Others.w);
+	}*/
+
+	// SIMD 적용
+	FVector4 operator-(const FVector4& Others) const
+	{
+		FVector4 result = {};
+
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 other = _mm_loadu_ps(&Others.x);
+		__m128 difference = _mm_sub_ps(current, other);
+
+		_mm_storeu_ps(&result.x, difference);
+		return result;
 	}
 
-	FVector4 operator*(float Scalar) const
+	/*FVector4 operator*(float Scalar) const
 	{
 		return FVector4(x * Scalar, y * Scalar, z * Scalar, w * Scalar);
+	}*/
+
+	// SIMD 적용
+	FVector4 operator*(float Scalar) const
+	{
+		FVector4 result = {};
+
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 scalar = _mm_set1_ps(Scalar);
+		__m128 res = _mm_mul_ps(current, scalar);
+
+		_mm_storeu_ps(&result.x, res);
+		return result;
 	}
 
-	void operator+=(const FVector4& Others)
+	/*void operator+=(const FVector4& Others)
 	{
 		x += Others.x;
 		y += Others.y;
 		z += Others.z;
 		w += Others.w;
+	}*/
+
+	// SIMD 적용
+	void operator+=(const FVector4& Others)
+	{
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 other = _mm_loadu_ps(&Others.x);
+		__m128 sum = _mm_add_ps(current, other);
+
+		_mm_storeu_ps(&x, sum);
 	}
 
-	void operator-=(const FVector4& Others)
+	/*void operator-=(const FVector4& Others)
 	{
 		x -= Others.x;
 		y -= Others.y;
 		z -= Others.z;
 		w -= Others.w;
+	}*/
+
+	void operator-=(const FVector4& Others)
+	{
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 other = _mm_loadu_ps(&Others.x);
+		__m128 difference = _mm_sub_ps(current, other);
+
+		_mm_storeu_ps(&x, difference);
 	}
 
-	void operator*=(float Scalar)
+	/*void operator*=(float Scalar)
 	{
 		x *= Scalar;
 		y *= Scalar;
 		z *= Scalar;
 		w *= Scalar;
+	}*/
+	
+	// SIMD 적용
+	void operator*=(float Scalar)
+	{
+		__m128 current = _mm_loadu_ps(&x);
+		__m128 scalar = _mm_set1_ps(Scalar);
+		__m128 res = _mm_mul_ps(current, scalar);
+
+		_mm_storeu_ps(&x, res);
 	}
 
-	//내적
+/*	//내적
 	inline static float dot(const FVector4& A, const FVector4& B)
 	{
 		return A.x * B.x + A.y * B.y + A.z * B.z + A.w * B.w;
+	}*/
+
+	//내적(SIMD 적용)
+	inline static float dot(const FVector4& A, const FVector4& B)
+	{
+		__m128 a = _mm_loadu_ps(&A.x);
+		__m128 b = _mm_loadu_ps(&B.x);
+
+		__m128 result = _mm_dp_ps(a, b, 0xFF);
+
+		// _mm_cvtss_f32(result) => 최하위 float 값 반환
+		return _mm_cvtss_f32(result);
 	}
 
 	//4차원에는 외적이 없다.

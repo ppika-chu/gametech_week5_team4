@@ -118,7 +118,7 @@ struct alignas(16) FMatrix {
 	}
 
 
-	FMatrix operator+ (const FMatrix& Other) const
+	/*FMatrix operator+ (const FMatrix& Other) const
 	{ 
 		FMatrix result = {};
 
@@ -128,11 +128,26 @@ struct alignas(16) FMatrix {
 			}
 		}
 		return result;
+	}*/
+
+	FMatrix operator+ (const FMatrix& Other) const
+	{ 
+		FMatrix result = {};
+
+		for (int row = 0; row < 4; ++row) {
+			
+			const __m128 current = _mm_load_ps(M[row]);
+			const __m128 other = _mm_load_ps(Other.M[row]);
+
+			const __m128 sum = _mm_add_ps(current, other);
+
+			_mm_store_ps(result.M[row], sum);
+		
+		}
+		return result;
 	}
 
-
-
-	FMatrix operator- (const FMatrix& Other) const
+	/*FMatrix operator- (const FMatrix& Other) const
 	{ 
 		FMatrix result = {};
 
@@ -142,10 +157,27 @@ struct alignas(16) FMatrix {
 			}
 		}
 		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix operator- (const FMatrix& Other) const
+	{ 
+		FMatrix result = {};
+
+		for (int row = 0; row < 4; ++row) {
+
+			const __m128 current = _mm_load_ps(M[row]);
+			const __m128 other = _mm_load_ps(Other.M[row]);
+
+			const __m128 difference = _mm_sub_ps(current, other);
+
+			_mm_store_ps(result.M[row], difference);
+
+		}
+		return result;
 	}
 
-
-	FMatrix operator+(float f) const
+	/*FMatrix operator+(float f) const
 	{
 		FMatrix result = {};
 		for (int row = 0; row < 4; ++row) {
@@ -154,15 +186,47 @@ struct alignas(16) FMatrix {
 			}
 		}
 		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix operator+(float f) const
+	{
+		FMatrix result = {};
+		const __m128 scalar = _mm_set1_ps(f);
+
+		for (int row = 0; row < 4; ++row) {
+
+			const __m128 current = _mm_load_ps(M[row]);
+			const __m128 sum = _mm_add_ps(current, scalar);
+
+			_mm_store_ps(result.M[row], sum);
+		}
+		return result;
 	}
 
-	FMatrix operator-(float f) const
+	/*FMatrix operator-(float f) const
 	{ 
 		FMatrix result={};
 		for (int row = 0; row < 4; ++row) {
 			for (int col = 0; col < 4; ++col) {
 				result.M[row][col] = M[row][col] - f;
 			}
+		}
+		return result;
+	}*/
+
+	// SIMD 적용
+	FMatrix operator-(float f) const
+	{ 
+		FMatrix result={};
+		const __m128 scalar = _mm_set1_ps(f);
+
+		for (int row = 0; row < 4; ++row) {
+
+			const __m128 current = _mm_load_ps(M[row]);
+			const __m128 difference = _mm_sub_ps(current, scalar);
+
+			_mm_store_ps(result.M[row], difference);
 		}
 		return result;
 	}
@@ -347,22 +411,68 @@ struct alignas(16) FMatrix {
 		return FVector(M[i][0], M[i][1], M[i][2]);
 	}
 
-	// 위치 변환 (w = 1, 이동 포함).  행벡터 규약 v x M
+/*	// 위치 변환 (w = 1, 이동 포함).  행벡터 규약 v x M
 	[[nodiscard]] FVector TransformPosition(const FVector& V) const
 	{
 		return FVector(
 			V.x * M[0][0] + V.y * M[1][0] + V.z * M[2][0] + M[3][0],
 			V.x * M[0][1] + V.y * M[1][1] + V.z * M[2][1] + M[3][1],
 			V.x * M[0][2] + V.y * M[1][2] + V.z * M[2][2] + M[3][2]);
+	}*/
+
+	// 위치 변환 (w = 1, 이동 포함).  행벡터 규약 v x M
+	// SIMD 적용
+	[[nodiscard]] FVector TransformPosition(const FVector& V) const
+	{
+		const __m128 row0 = _mm_load_ps(M[0]);
+		const __m128 row1 = _mm_load_ps(M[1]);
+		const __m128 row2 = _mm_load_ps(M[2]);
+		const __m128 row3 = _mm_load_ps(M[3]);
+
+		const __m128 vx = _mm_set1_ps(V.x);
+		const __m128 vy = _mm_set1_ps(V.y);
+		const __m128 vz = _mm_set1_ps(V.z);
+
+		__m128 result = _mm_mul_ps(vx, row0);
+		result = _mm_add_ps(result, _mm_mul_ps(vy, row1));
+		result = _mm_add_ps(result, _mm_mul_ps(vz, row2));
+		result = _mm_add_ps(result, row3);
+
+		alignas(16) float values[4];
+		_mm_store_ps(values, result);
+
+		return FVector(values[0], values[1], values[2]);
 	}
 
-	// 방향 변환 (w = 0, 이동 제외)
+/*	// 방향 변환 (w = 0, 이동 제외)
 	[[nodiscard]] FVector TransformVector(const FVector& V) const
 	{
 		return FVector(
 			V.x * M[0][0] + V.y * M[1][0] + V.z * M[2][0],
 			V.x * M[0][1] + V.y * M[1][1] + V.z * M[2][1],
 			V.x * M[0][2] + V.y * M[1][2] + V.z * M[2][2]);
+	}*/
+
+	// 방향 변환 (w = 0, 이동 제외)
+	[[nodiscard]] FVector TransformVector(const FVector& V) const
+	{
+
+		const __m128 row0 = _mm_load_ps(M[0]);
+		const __m128 row1 = _mm_load_ps(M[1]);
+		const __m128 row2 = _mm_load_ps(M[2]);
+
+		const __m128 vx = _mm_set1_ps(V.x);
+		const __m128 vy = _mm_set1_ps(V.y);
+		const __m128 vz = _mm_set1_ps(V.z);
+
+		__m128 result = _mm_mul_ps(vx, row0);
+		result = _mm_add_ps(result, _mm_mul_ps(vy, row1));
+		result = _mm_add_ps(result, _mm_mul_ps(vz, row2));
+
+		alignas(16) float values[4];
+		_mm_store_ps(values, result);
+
+		return FVector(values[0], values[1], values[2]);
 	}
 
 	// General 4x4 inverse, including perspective projection. Keep Inverse() as
