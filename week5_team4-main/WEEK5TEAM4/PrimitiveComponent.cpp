@@ -87,7 +87,8 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 
 	// AABB 충돌체를 이용한 광선-메시 충돌 최적화
 	const FAABB BoundingBox = GetBoundingBox();
-	if (!RayIntersectsAABB(PickingRay.ToRay(), PickingRay.Length, BoundingBox))
+	float Enter;
+	if (!RayIntersectsAABB(PickingRay.ToRay(), PickingRay.Length, BoundingBox, Enter))
 	{
 		return false;
 	}

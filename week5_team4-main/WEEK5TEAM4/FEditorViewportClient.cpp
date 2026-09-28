@@ -17,7 +17,9 @@
 #include "UTextComponent.h"
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
+#include "UStaticMeshComponent.h"
 #include "RayCast.h"
+#include "FBVH.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -71,7 +73,7 @@ void FEditorViewportClient::SetViewportType(EViewportType InViewportType)
 	}
 }
 
-AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector)
+AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector, const FBVH& BVH)
 {
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
@@ -104,6 +106,18 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
+
+
+	// StaticMesh는 BVH로 검사한다.
+	// 가장 가까운 메시의 HitT가 이후 선형 검사의 시작 최단값이 된다.
+	float MeshHitT = FLT_MAX;
+	if (UStaticMeshComponent* HitMesh = BVH.QueryRay(PickingRay, MeshHitT))
+	{
+		NearlistT = MeshHitT;
+		NearestActor = HitMesh->GetOwner();
+	}
+
+	// StaticMesh가 아닌 컴포넌트(PickTargets)는 기존처럼 선형으로 검사한다.
 	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
 	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 	{

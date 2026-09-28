@@ -4,6 +4,7 @@
 #include "Actor.h"
 
 #include "RenderInfo.h"
+#include "FBVH.h"
 //struct FRenderInfo;
 
 class UWorld final : public UObject
@@ -22,6 +23,9 @@ public:
 
 	TArray<AActor*>& GetActors() { return mActors; }
 
+	FBVH& GetBoundingVolumeHierarchy() { return BoundingVolumeHierarchy; }
+	const FBVH& GetBoundingVolumeHierarchy() const { return BoundingVolumeHierarchy; }
+
 	void Tick(float deltaTime);
 	void Render(float deltaTime, FRenderCollector& outCollector);
 	//void Render();
@@ -38,7 +42,8 @@ private:
 	
 	// Todo: Must reserve
 	TArray<AActor*> mActors;
-
+	TArray<UStaticMeshComponent*> OutVisible;
+	FBVH BoundingVolumeHierarchy;
 
 
 };

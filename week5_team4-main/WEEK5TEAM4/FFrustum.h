@@ -11,7 +11,7 @@ struct FPlane
 	FVector AbsoluteNormal;
 	float	Offset;
 	
-	FPlane() : Normal(FVector(0, 0, 0)), Offset(0) {}
+	FPlane() : Normal(FVector(0, 0, 0)), AbsoluteNormal(FVector(0,0,0)), Offset(0) {}
 
 	explicit FPlane(const FVector4& Value)
 	{
@@ -67,16 +67,38 @@ struct FFrustum
 		}
 		return (false);
 	}
+
+	enum class EFrustumTestResult { Outside, Inside, Intersect };
+
+	EFrustumTestResult ClassifyAABB(const FAABB& AABB, uint32& PlaneMask) const
+	{
+		FVector Center;
+		FVector Extent;
+
+		Center = (AABB.Max + AABB.Min) * 0.5f;
+		Extent = (AABB.Max - AABB.Min) * 0.5f;
+
+		for (int32 i = 0; i < static_cast<int32>(EPlane::Count); i++)
+		{
+			if ((PlaneMask & (1u << i)) == 0)
+			{
+				continue;
+			}
+
+			float Distance = Faces[i].SignedDistance(Center);
+			float ProjectedExtent = FVector::dot(Extent, Faces[i].AbsoluteNormal);
+
+			if (Distance < -ProjectedExtent)
+				return (EFrustumTestResult::Outside);
+			else if (Distance > ProjectedExtent)
+				PlaneMask &= ~(1u << i);
+		}
+		if (PlaneMask == 0)
+			return (EFrustumTestResult::Inside);
+
+		return (EFrustumTestResult::Intersect);
+	}
 };
-
-
-//  ① - w' ≤ x'     (왼쪽 끝보다 오른쪽)
-//	② x' ≤ w'      (오른쪽 끝보다 왼쪽)
-//	③ - w' ≤ y'     (아래 끝보다 위)
-//	④ y' ≤ w'      (위 끝보다 아래)
-//	⑤ 0 ≤ z'       (Near보다 멀리)
-//	⑥ z' ≤ w'      (Far보다 가까이)
-
 
 inline FFrustum createFrustumFromCamera(const FMatrix& Matrix)
 {
@@ -87,12 +109,12 @@ inline FFrustum createFrustumFromCamera(const FMatrix& Matrix)
 	const FVector4 ClipZ = FVector4(Matrix.M[0][2], Matrix.M[1][2], Matrix.M[2][2], Matrix.M[3][2]); // z
 	const FVector4 ClipW = FVector4(Matrix.M[0][3], Matrix.M[1][3], Matrix.M[2][3], Matrix.M[3][3]); // w
 
-	Frustum[FFrustum::EPlane::Left] = FPlane(ClipW + ClipX);
-	Frustum[FFrustum::EPlane::Right] = FPlane(ClipW - ClipX);
-	Frustum[FFrustum::EPlane::Bottom] = FPlane(ClipW + ClipY);
-	Frustum[FFrustum::EPlane::Top] = FPlane(ClipW - ClipY);
-	Frustum[FFrustum::EPlane::Near] = FPlane(ClipZ);
-	Frustum[FFrustum::EPlane::Far] = FPlane(ClipW - ClipZ);
+	Frustum[FFrustum::EPlane::Left] = FPlane(ClipW + ClipX); // - w' ≤ x' (왼쪽 끝보다 오른쪽)
+	Frustum[FFrustum::EPlane::Right] = FPlane(ClipW - ClipX); // x' ≤ w' (오른쪽 끝보다 왼쪽)
+	Frustum[FFrustum::EPlane::Bottom] = FPlane(ClipW + ClipY); // - w' ≤ y' (아래 끝보다 위)
+	Frustum[FFrustum::EPlane::Top] = FPlane(ClipW - ClipY); // y' ≤ w' (위 끝보다 아래)
+	Frustum[FFrustum::EPlane::Near] = FPlane(ClipZ); // 0 ≤ z' (Near보다 멀리)
+	Frustum[FFrustum::EPlane::Far] = FPlane(ClipW - ClipZ); // z' ≤ w' (Far보다 가까이)
 
 	return Frustum;
 }

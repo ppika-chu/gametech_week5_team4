@@ -6,6 +6,7 @@
 #include "JsonUtil.h"
 #include "Console.h"
 #include "ObjectFactory.h"
+#include "UStaticMeshComponent.h"
 
 UWorld::~UWorld()
 {
@@ -70,6 +71,8 @@ void UWorld::AddActor(AActor* actor)
 
 	// TODO: 전처리를 통해 에디터 모드가 아니면 아래 코드를 컴파일하지 않게 막아야함.
 	actor->CreateEditorComponents();
+
+	BoundingVolumeHierarchy.MarkDirty();
 }
 
 bool UWorld::RemoveActor(uint32 componentUUID)
@@ -83,6 +86,7 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 	//mActors.RemoveAt(componentIndex, 1);
 	mActors.RemoveAtSwap(componentIndex);
 
+	BoundingVolumeHierarchy.MarkDirty();
 	return true;
 }
 
@@ -92,6 +96,15 @@ void UWorld::Tick(float deltaTime)
 	{
 		actor->Tick(deltaTime);
 	}
+
+	if (BoundingVolumeHierarchy.IsDirty())
+	{
+		BoundingVolumeHierarchy.Build(mActors);
+	}
+	else
+	{
+		BoundingVolumeHierarchy.Refit();
+	}
 }
 
 void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
@@ -100,6 +113,14 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 	// 채워지므로 여기서 Reset 하면 남의 것까지 날린다. 메시/픽킹 배열만 여기서 갈아끼운다.
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);
 	outCollector.PickTargets.Reset(DEFAULT_RESERVE_MEM);
+
+
+	BoundingVolumeHierarchy.QueryFrustum(outCollector.Frustum, OutVisible, outCollector.CulledObjectCount);
+
+	for (UStaticMeshComponent* StaticMeshComponent : OutVisible)
+	{
+		StaticMeshComponent->Render(outCollector);
+	}
 
 	for (AActor* actor : mActors)
 	{

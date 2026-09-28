@@ -25,6 +25,16 @@ struct FAABB
 		Max.z = FMath::Max(Max.z, Point.z);
 	}
 
+	inline void ExpandToInclude(const FAABB& Other)
+	{
+		Min.x = FMath::Min(Min.x, Other.Min.x);
+		Min.y = FMath::Min(Min.y, Other.Min.y);
+		Min.z = FMath::Min(Min.z, Other.Min.z);
+		Max.x = FMath::Max(Max.x, Other.Max.x);
+		Max.y = FMath::Max(Max.y, Other.Max.y);
+		Max.z = FMath::Max(Max.z, Other.Max.z);
+	}
+
 	inline void GetCorners(FVector Out[8]) const
 	{
 		Out[0] = FVector(Min.x, Min.y, Min.z);
