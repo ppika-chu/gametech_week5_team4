@@ -8,6 +8,7 @@
 #include "ObjectFactory.h"
 #include "UTextComponent.h"
 #include "FEditorViewportClient.h"
+#include <algorithm>
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
@@ -200,13 +201,49 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 void FGraphicsManager::Render()
 {
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
+	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 
+	// state sorting : 같은 텍스처 / 메시끼리 묶어서 캐시 hit 높이기
+	std::sort(mRenderCollector.RenderInfos.begin(), mRenderCollector.RenderInfos.end(),
+			[&](const FRenderInfo& A, const FRenderInfo& B)
+		{
+			// 거리 구간을 나눔.
+			constexpr float BucketSize = 100.0f;
+
+			// Early-Z
+			const FVector ViewPosA = mViewMatrix.TransformPosition(A.Model.GetOrigin());
+			const FVector ViewPosB = mViewMatrix.TransformPosition(B.Model.GetOrigin());
+
+			const float DistA = ViewPosA.z;   // 뷰 공간 깊이(z)만 사용
+			const float DistB = ViewPosB.z;
+
+			const int32 BucketA = static_cast<int32>(DistA / BucketSize);
+			const int32 BucketB = static_cast<int32>(DistB / BucketSize);
+
+			// 1차 sort: 대략 거리 구간 나누기
+			if (BucketA != BucketB)
+				return BucketA < BucketB;
+
+			// 2차 sort : 같은 버킷이면 텍스처로 묶기
+			if (A.Texture.get() != B.Texture.get())
+				return A.Texture.get() < B.Texture.get();
+			
+			// 3차 sort : 같은 버킷이고 같은 텍스처면 같은 메시로 묶기
+			return A.VertexBuffer.Get() < B.VertexBuffer.Get();
+		});
+		
 	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 	{
 		if (RenderInfo.Texture)
 		{
-			mMeshPipeline->ClearShaderResource();
-			mMeshPipeline->ClearSamplerState();
+			if (RenderInfo.Texture != mLastBoundTexture)
+			{
+				mMeshPipeline->ClearShaderResource();
+				mMeshPipeline->ClearSamplerState();
+				mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
+				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+				mLastBoundTexture = RenderInfo.Texture;
+			}
 
 			FConstants Constants{};
 			Constants.Matrix = RenderInfo.Model;
@@ -216,15 +253,11 @@ void FGraphicsManager::Render()
 			Constants.UVOffset = RenderInfo.UVOffset;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
-			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
-
-			mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
-
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
 		}
 		else
 		{
+			mLastBoundTexture = nullptr;
 			mRenderer->RenderPrimitiveIndexed(RenderInfo);
 		}
 	}

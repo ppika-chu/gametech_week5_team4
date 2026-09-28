@@ -393,10 +393,16 @@ struct FMatrix {
 		R.M[3][0] = -(M[3][0] * R.M[0][0] + M[3][1] * R.M[1][0] + M[3][2] * R.M[2][0]);
 		R.M[3][1] = -(M[3][0] * R.M[0][1] + M[3][1] * R.M[1][1] + M[3][2] * R.M[2][1]);
 		R.M[3][2] = -(M[3][0] * R.M[0][2] + M[3][1] * R.M[1][2] + M[3][2] * R.M[2][2]);
-
+		
 		return R;
 	}
 
+	// 월드 transform 행렬일 때, 이동 벡터만 뽑아오는 용도
+	FVector GetOrigin() const
+	{
+		return FVector(M[3][0], M[3][1], M[3][2]); 		
+	}
+	
 	// end Struct Matrix
 };
 
@@ -429,4 +435,5 @@ inline const FMatrix FMatrix::UEToDX = {
 	FVector4(1, 0, 0, 0),
 	FVector4(0, 1, 0, 0),
 	FVector4(0, 0, 0, 1)
+
 };
