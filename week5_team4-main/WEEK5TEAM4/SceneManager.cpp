@@ -518,7 +518,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 #else
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
-	updateObjectListPanelGUI(guiReference);
+	//updateObjectListPanelGUI(guiReference);
 	ConsoleWindow::Get().Process(mBottomBarHeight);
 	mContentBrowser.SetAssetManager(guiReference.AssetManager);
 	mContentBrowser.Render(mBottomBarHeight);

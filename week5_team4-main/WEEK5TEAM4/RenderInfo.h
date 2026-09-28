@@ -5,6 +5,7 @@
 #include "FName.h"
 #include "Assets.h"
 #include "TArray.h"
+#include "Frustum.h"
 
 class FCamera;
 class UPrimitiveComponent;
@@ -76,6 +77,9 @@ public:
 	TArray<FRenderLineInfo> LineInfos;     // 라인 패스
 	TArray<UPrimitiveComponent*> PickTargets;
 
+	FFrustum Frustum;
+	bool bHasViewFrustum = true;
+
 	// 전체 액터 수 = DrawnObjectCount + CulledObjectCount
 	// 그려진 액터 개수
 	mutable uint32 DrawnObjectCount = 0;
@@ -120,6 +124,8 @@ public:
 
 		DrawnObjectCount = 0;
         CulledObjectCount = 0;
+
+		bHasViewFrustum = true;
 	}
 
 	inline const TArray<FRenderQuadInfo>& GetOpaqueQuadInfos() const { return OpaqueQuadInfos; }

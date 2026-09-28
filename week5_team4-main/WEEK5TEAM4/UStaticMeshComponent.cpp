@@ -100,6 +100,24 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+
+    const FMatrix ModelMatrix = GetTransformMatrix().MakeMatrix();
+
+    // 로컬 AABB를 현재 위치·회전·스케일에 맞게
+    // 월드 AABB로 변환
+    const FAABB WorldBoundingBox = mMeshAsset->GetLocalBoundingBox().ToWorld(ModelMatrix);
+
+    if (RenderCollector.bHasViewFrustum
+        && !RenderCollector.Frustum.Intersects(
+            WorldBoundingBox))
+    {
+        ++RenderCollector.CulledObjectCount;
+
+        // RenderInfos에 넣지 않으므로
+        // 이 오브젝트의 Draw Call이 발생하지 않음
+        return;
+    }
+
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
@@ -135,7 +153,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
-        RenderInfo.Model = GetTransformMatrix().MakeMatrix();
+        RenderInfo.Model = ModelMatrix;
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;

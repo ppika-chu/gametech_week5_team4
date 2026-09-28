@@ -251,6 +251,9 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		FMatrix ViewProjection = Camera.GetViewMatrix() * Camera.GetUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio);
 		FMatrix InvViewProjection = Camera.GetInverseUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio) * Camera.GetViewMatrix().AffineInverse();
 
+		RenderCollector.Frustum.Build(ViewProjection);
+		RenderCollector.bHasViewFrustum = true;
+
 		mSceneManager->Render(deltaTime, RenderCollector);
 
 		// 마우스 피킹 처리
