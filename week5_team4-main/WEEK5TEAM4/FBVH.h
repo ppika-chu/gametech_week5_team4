@@ -12,11 +12,12 @@ public:
     void Build(const TArray<UPrimitiveComponent*>& Items);
     void Clear();
 
+    int32 GetComponentNum() { return ComponentToLeaf.Num(); }
     // Frustum culling 용
     void QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor) const;
 
     // Picking 용 (Ray와 가장 가까운 Component 반환)
-    UPrimitiveComponent* QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const;
+    UPrimitiveComponent* QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount, const FFrustum* Frustum = nullptr) const;
 
     // 객체 삭제했을 때
     void Remove(UPrimitiveComponent* Item);

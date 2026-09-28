@@ -187,7 +187,7 @@ void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimi
 }
 
 // Picking 용 (Ray와 가장 가까운 Component 반환)
-UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const
+UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount, const FFrustum* Frustum) const
 {
     if (RootIndex < 0) return nullptr;
     
@@ -208,6 +208,10 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
         {
             for (UPrimitiveComponent* Item : CurrentNode.Items)
             {
+                // 화면에서 안 보이는 건 피킹 후보 제외
+                if (Frustum && !Frustum->Intersects(Item->GetBoundingBox()))
+                    continue;
+
                 // Picking Test count ++
                 if (OutTestCount) ++(*OutTestCount);
 

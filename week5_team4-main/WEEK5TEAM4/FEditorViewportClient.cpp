@@ -105,7 +105,7 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
-	UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount);
+	UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount, RenderCollector.Frustum);
 	NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
 
 	#if 0
