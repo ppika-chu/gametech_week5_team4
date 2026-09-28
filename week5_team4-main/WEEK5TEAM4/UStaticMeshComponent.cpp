@@ -108,6 +108,29 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+    // 지금 너무 부자연스러워서 일단 뺌.
+    #if 0
+    // 너무 작은 픽셀은 render pass
+    // TODO : FOV / 해상도 반영한 정확한 화면 픽셀 크기 계산
+    // 지금은 그냥 오브젝트 반지름 대비 거리 비율 (100배보다 멀면 안 그림)
+    if (RenderCollector.Camera)
+    {
+        const FAABB WorldBounds = GetBoundingBox();
+        const FVector Extent = (WorldBounds.Max - WorldBounds.Min) * 0.5f;
+        const float Radius = Extent.Length();
+        const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+        const float Distance = (Center - RenderCollector.Camera->Transform.Location).Length();
+
+        constexpr float MaxDistance = 100.0f;
+        
+        if (Distance > Radius * MaxDistance)
+        {
+            ++RenderCollector.CulledObjectCount;
+            return;
+        }
+    }
+    #endif
+
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
@@ -148,7 +171,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
 
-        RenderCollector.RenderInfos.Add(RenderInfo);
+        RenderCollector.RenderInfos.Add(std::move(RenderInfo));
     }
 }
 
