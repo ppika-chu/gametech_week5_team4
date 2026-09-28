@@ -133,7 +133,7 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 
 	if (bHit)
 	{
-		OutHitT = NearestT;
+		OutHitT = NearestT * PickingRay.Length;
 	}
 
 	return bHit;

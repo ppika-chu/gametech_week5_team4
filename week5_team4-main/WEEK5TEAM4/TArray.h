@@ -45,6 +45,7 @@ public:
 	void SetNum(int32 NewNum, bool bAllowShrinking = true);
 
 	uint32 Add(const T& data);
+	uint32 Add(T&& data);  
 
 	template <typename... TArg>
 	T& Emplace(TArg&&... args)
@@ -184,7 +185,14 @@ template<typename T>
 inline uint32 TArray<T>::Add(const T& data)
 {
 	mDatas.push_back(data);
+	
+	return static_cast<uint32>(mDatas.size()) - 1;
+}
 
+template<typename T>
+inline uint32 TArray<T>::Add(T&& data)
+{
+	mDatas.push_back(std::move(data));
 	return static_cast<uint32>(mDatas.size()) - 1;
 }
 
