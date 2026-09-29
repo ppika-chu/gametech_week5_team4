@@ -527,7 +527,13 @@ private:
 	void CreateDepthStencilBuffer();
 
 	void BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32 StencilRef = 0) const;
-	void BindRasterizerState(ID3D11RasterizerState* Rasterizer) const;
+	void BindRasterizerState(ID3D11RasterizerState* RasterizerState) const;
+	void BindDepthStencilState(ID3D11DepthStencilState* DepthStencilState, uint32 StencilRef) const;
+	void BindBlendState(ID3D11BlendState* BlendState) const;
+	void BindPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY PrimitiveTopology) const;
+	void BindInputLayout(ID3D11InputLayout* InputLayout) const;
+	void BindVertexShader(ID3D11VertexShader* VertexShader) const;
+	void BindPixelShader(ID3D11PixelShader* PixelShader) const;
 
 private:
     ID3D11Device* Device = nullptr;
@@ -570,25 +576,26 @@ private:
 	mutable uint32 KnownPSSamplerMask = 0;
 
 	// 바인딩 캐시
-	mutable ID3D11RasterizerState* RasterizerState = nullptr;
+	mutable ID3D11RasterizerState* BoundRasterizerState = nullptr;
 	mutable bool bIsChangedRasterizerState = true;
 
-	mutable ID3D11DepthStencilState* DepthStencilState = nullptr;
+	mutable ID3D11DepthStencilState* BoundDepthStencilState = nullptr;
+	mutable uint32 BoundStencilRef = 0;
 	mutable bool bIsChangedDepthStencilState = true;
 
-	mutable ID3D11BlendState* BlendState = nullptr;
+	mutable ID3D11BlendState* BoundBlendState = nullptr;
 	mutable bool bIsChangedBlendState = true;
 
-	mutable D3D11_PRIMITIVE_TOPOLOGY PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	mutable D3D11_PRIMITIVE_TOPOLOGY BoundPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	mutable bool bIsChangedPrimitiveTopology = true;
 
-	mutable ID3D11InputLayout* InputLayout = nullptr;
+	mutable ID3D11InputLayout* BoundInputLayout = nullptr;
 	mutable bool bIsChangedInputLayout = true;
 
-	mutable ID3D11VertexShader* VertexShader = nullptr;
+	mutable ID3D11VertexShader* BoundVertexShader = nullptr;
 	mutable bool bIsChangedVertexShader = true;
 
-	mutable ID3D11PixelShader* PixelShader = nullptr;
+	mutable ID3D11PixelShader* BoundPixelShader = nullptr;
 	mutable bool bIsChangedPixelShader = true;
 
 

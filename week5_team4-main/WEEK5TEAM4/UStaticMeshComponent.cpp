@@ -71,6 +71,8 @@ void UStaticMeshComponent::DeserializeClass(const json::JSON& inJson)
 		mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(MaterialAssetIDs[i], true);
 	}
 
+    RebuildSectionTextures();
+
 	TArray<FVector2> UVOffsets;
 	if (PropertiesJson.hasKey("UVOffsets"))
 	{
@@ -100,15 +102,6 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
-    //절두체 컬링 진행
-
-    //if (RenderCollector.Frustum.CheckFrustumCulling(GetBoundingBox()))
-    //{
-    //    ++RenderCollector.CulledObjectCount;
-    //    return;
-    //}
-
-
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
@@ -116,7 +109,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
     {
         const FStaticMeshSection& Section = mMeshAsset->GetSections()[SectionIndex];
 
-        TSharedPtr<FMaterialAsset> Material = mMaterialAssets[SectionIndex];
+        TSharedPtr<FMaterialAsset>& Material = mMaterialAssets[SectionIndex];
 
         const FVector4 MaterialColor = Material
             ? FVector4(
@@ -126,23 +119,12 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
                 Material->GetOpacity())
             : FVector4(1, 1, 1, 1);
 
-        TSharedPtr<FTexture2DAsset> SectionTexture = Material ? Material->GetDiffuseTexture() : nullptr;
-
-        if (!SectionTexture && StaticMesh)
-        {
-            SectionTexture = StaticMesh->GetDiffuseTexture(Section.MaterialName);
-        }
-        if (!SectionTexture)
-        {
-            SectionTexture = mTextureAsset;
-        }
-
         FRenderInfo RenderInfo;
         RenderInfo.VertexBuffer = mMeshAsset->GetVertexBuffer();
         RenderInfo.IndexBuffer = mMeshAsset->GetIndexBuffer();
         RenderInfo.StartIndex = Section.FirstIndex;
         RenderInfo.IndexCount = Section.IndexCount;
-        RenderInfo.Texture = SectionTexture;
+        RenderInfo.Texture = mSectionTextures[SectionIndex];
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
         RenderInfo.Model = GetCachedWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
@@ -166,15 +148,16 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
 bool UStaticMeshComponent::UpdateWorldCache()
 {
     if (!IsTransformDirty())
-    { 
+    {
         return (false);
     }
-
+ 
     mCachedWorldMatrix = GetTransformMatrix().MakeMatrix();
     if (mMeshAsset)
     {
         mCachedWorldBounds = mMeshAsset->GetLocalBoundingBox().ToWorld(mCachedWorldMatrix);
     }
+
     ClearTransformDirty();
     return (true);
 }
@@ -189,6 +172,36 @@ const FAABB& UStaticMeshComponent::GetCachedWorldBounds() const
     return (mCachedWorldBounds);
 }
 
+
+void UStaticMeshComponent::RebuildSectionTextures()
+{
+    if (mMeshAsset == nullptr)
+    {
+        mSectionTextures.Empty();
+        return ;
+    }
+
+    mSectionTextures.SetNum(mMeshAsset->GetSections().Num());
+
+    for (int32 SectionIndex = 0; SectionIndex < mMeshAsset->GetSections().Num(); ++SectionIndex)
+    {
+        auto& Section = mMeshAsset->GetSections()[SectionIndex];
+
+        const TSharedPtr<FMaterialAsset>& Material = mMaterialAssets[SectionIndex];
+        TSharedPtr<FTexture2DAsset> SectionTexture = Material ? Material->GetDiffuseTexture() : nullptr;
+
+        if (!SectionTexture && StaticMesh)
+        {
+            SectionTexture = StaticMesh->GetDiffuseTexture(Section.MaterialName);
+        }
+        if (!SectionTexture)
+        {
+            SectionTexture = mTextureAsset;
+        }
+        mSectionTextures[SectionIndex] = SectionTexture;
+    }
+}
+
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 {
     if (!InMesh)
@@ -196,6 +209,7 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 		mMeshAsset = nullptr;
 		mMaterialAssets.Empty();
 		mUVOffsets.Empty();
+        RebuildSectionTextures();
 		return;
     }
 
@@ -208,5 +222,6 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
         mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(Section.MaterialAssetID, true);
     }
     mMeshAsset = InMesh;
+    RebuildSectionTextures();
     MarkTransformDirty();
 }

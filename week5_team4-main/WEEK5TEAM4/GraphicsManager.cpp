@@ -201,31 +201,25 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 void FGraphicsManager::Render()
 {
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
+	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 
 	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 	{
-		if (RenderInfo.Texture)
-		{
-			mMeshPipeline->ClearShaderResource();
+		const bool bHasTexture = (RenderInfo.Texture != nullptr);
+		mMeshPipeline->ClearShaderResource();
 
-			FConstants Constants{};
-			Constants.Matrix = RenderInfo.Model;
-			Constants.Color = RenderInfo.Color;
-			Constants.UseVertexColor = RenderInfo.UseVertexColor;
-			Constants.HasTexture = RenderInfo.Texture ? 1 : 0;
-			Constants.UVOffset = RenderInfo.UVOffset;
+		FConstants Constants{};
+		Constants.Matrix = RenderInfo.Model;
+		Constants.Color = RenderInfo.Color;
+		Constants.UseVertexColor = RenderInfo.UseVertexColor;
+		Constants.HasTexture = bHasTexture;
+		Constants.UVOffset = RenderInfo.UVOffset;
 
-			mMeshPipeline->UpdateConstantBuffer(0, Constants);
-			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
+		mMeshPipeline->UpdateConstantBuffer(0, Constants);
+			
+		mMeshPipeline->SetShaderResource(0, bHasTexture ? RenderInfo.Texture->GetSRV() : nullptr);
 
-			mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
-
-			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
-		}
-		else
-		{
-			mRenderer->RenderPrimitiveIndexed(RenderInfo);
-		}
+		mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())

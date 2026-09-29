@@ -382,16 +382,14 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32
 	// RSSetState는 드로우 직전마다 갈아치워지므로 뷰 모드 선택은 여기서 해야 한다.
 	// 이 모드를 지원하지 않는 파이프라인(2D/기즈모)은 Lit 상태로 폴백된다.
 
+	BindRasterizerState(Pipeline->GetRasterizerState(ViewModeIndex));
+	BindDepthStencilState(Pipeline->DepthStencilState, StencilRef);
+	BindBlendState(Pipeline->BlendState);
+	BindPrimitiveTopology(Pipeline->PrimitiveTopology);
+	BindInputLayout(Pipeline->InputLayout);
+	BindVertexShader(Pipeline->VertexShader);
+	BindPixelShader(Pipeline->PixelShader);
 
-
-
-	DeviceContext->RSSetState(Pipeline->GetRasterizerState(ViewModeIndex));
-	DeviceContext->OMSetDepthStencilState(Pipeline->DepthStencilState, StencilRef);
-	DeviceContext->OMSetBlendState(Pipeline->BlendState, nullptr, 0xffffffff);
-	DeviceContext->IASetPrimitiveTopology(Pipeline->PrimitiveTopology);
-	DeviceContext->IASetInputLayout(Pipeline->InputLayout);
-	DeviceContext->VSSetShader(Pipeline->VertexShader, nullptr, 0);
-	DeviceContext->PSSetShader(Pipeline->PixelShader, nullptr, 0);
 
 
 
@@ -752,13 +750,74 @@ void URenderer::BindPSSamplers(uint32 StartSlot, uint32 Count, ID3D11SamplerStat
 	}
 }
 
-void URenderer::BindRasterizerState(ID3D11RasterizerState* Rasterizer) const
+void URenderer::BindRasterizerState(ID3D11RasterizerState* RasterizerState) const
 {
-	if (bIsChangedRasterizerState || RasterizerState != Rasterizer)
+	if (bIsChangedRasterizerState || BoundRasterizerState != RasterizerState)
 	{
 		bIsChangedRasterizerState = false;
-		RasterizerState = Rasterizer;
-		DeviceContext->RSSetState(RasterizerState);
+		BoundRasterizerState = RasterizerState;
+		DeviceContext->RSSetState(BoundRasterizerState);
+	}
+}
+
+void URenderer::BindDepthStencilState(ID3D11DepthStencilState* DepthStencilState, uint32 StencilRef) const
+{
+	if (bIsChangedDepthStencilState || BoundDepthStencilState != DepthStencilState || BoundStencilRef != StencilRef)
+	{
+		bIsChangedDepthStencilState = false;
+		BoundDepthStencilState = DepthStencilState;
+		BoundStencilRef = StencilRef;
+		DeviceContext->OMSetDepthStencilState(BoundDepthStencilState, BoundStencilRef);
+	}
+}
+
+void URenderer::BindBlendState(ID3D11BlendState* BlendState) const
+{
+	if (bIsChangedBlendState || BoundBlendState != BlendState)
+	{
+		bIsChangedBlendState = false;
+		BoundBlendState = BlendState;
+		DeviceContext->OMSetBlendState(BoundBlendState, nullptr, 0xffffffff);
+	}
+}
+
+void URenderer::BindPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY PrimitiveTopology) const
+{
+	if (bIsChangedPrimitiveTopology || BoundPrimitiveTopology != PrimitiveTopology)
+	{
+		bIsChangedPrimitiveTopology = false;
+		BoundPrimitiveTopology = PrimitiveTopology;
+		DeviceContext->IASetPrimitiveTopology(BoundPrimitiveTopology);
+	}
+}
+
+void URenderer::BindInputLayout(ID3D11InputLayout* InputLayout) const
+{
+	if (bIsChangedInputLayout || BoundInputLayout != InputLayout)
+	{
+		bIsChangedInputLayout = false;
+		BoundInputLayout = InputLayout;
+		DeviceContext->IASetInputLayout(BoundInputLayout);
+	}
+}
+
+void URenderer::BindVertexShader(ID3D11VertexShader* VertexShader) const
+{
+	if (bIsChangedVertexShader || BoundVertexShader != VertexShader)
+	{
+		bIsChangedVertexShader = false;
+		BoundVertexShader = VertexShader;
+		DeviceContext->VSSetShader(BoundVertexShader, nullptr, 0);
+	}
+}
+
+void URenderer::BindPixelShader(ID3D11PixelShader* PixelShader) const
+{
+	if (bIsChangedPixelShader || BoundPixelShader != PixelShader)
+	{
+		bIsChangedPixelShader = false;
+		BoundPixelShader = PixelShader;
+		DeviceContext->PSSetShader(BoundPixelShader, nullptr, 0);
 	}
 }
 
