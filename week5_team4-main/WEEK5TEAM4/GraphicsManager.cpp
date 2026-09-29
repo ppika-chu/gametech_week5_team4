@@ -257,6 +257,7 @@ void FGraphicsManager::Render()
 			Constants.UVOffset = RenderInfo.UVOffset;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
+
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
 		}
 		else
