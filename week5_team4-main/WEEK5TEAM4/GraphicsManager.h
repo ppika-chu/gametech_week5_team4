@@ -122,6 +122,7 @@ private:
 	TSharedPtr<FRenderPipeline> mHighlightDrawPipeline;
 	TSharedPtr<FVertexBuffer> mHighlightVertexBuffer;
 	TSharedPtr<FIndexBuffer> mHighlightIndexBuffer;
+	TSharedPtr<FTexture2DAsset> mLastBoundTexture = nullptr;
 
 	FRenderCollector mRenderCollector;
 

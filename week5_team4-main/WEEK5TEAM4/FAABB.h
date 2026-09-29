@@ -2,6 +2,7 @@
 
 #include "Vector.h"
 #include "Matrix.h"
+#include <xmmintrin.h>
 
 struct FAABB
 {
@@ -44,15 +45,24 @@ struct FAABB
 
 		const FVector WorldCenter = Matrix.TransformPosition(Center);
 
-		FVector WorldExtent;
-		for (int32 i = 0; i < 3; ++i)
-		{
-			WorldExtent[i] =
-				FGenericPlatformMath::Abs(Matrix.M[0][i]) * Extent.x +
-				FGenericPlatformMath::Abs(Matrix.M[1][i]) * Extent.y +
-				FGenericPlatformMath::Abs(Matrix.M[2][i]) * Extent.z;
-		}
+		__m128 R0 = _mm_loadu_ps(&Matrix.M[0][0]);
+		__m128 R1 = _mm_loadu_ps(&Matrix.M[1][0]);
+		__m128 R2 = _mm_loadu_ps(&Matrix.M[2][0]);
+		__m128 R3 = _mm_setzero_ps();
 
+		_MM_TRANSPOSE4_PS(R0, R1, R2, R3);
+
+		const __m128 AbsMask = _mm_set1_ps(-0.0f);
+		const __m128 ExtentV = _mm_set_ps(0.f, Extent.z, Extent.y, Extent.x);
+
+		__m128 Wx = _mm_mul_ps(_mm_andnot_ps(AbsMask, R0), ExtentV);
+		__m128 Wy = _mm_mul_ps(_mm_andnot_ps(AbsMask, R1), ExtentV);
+		__m128 Wz = _mm_mul_ps(_mm_andnot_ps(AbsMask, R2), ExtentV);
+
+		float A[4], B[4], C[4];
+		_mm_storeu_ps(A, Wx); _mm_storeu_ps(B, Wy); _mm_storeu_ps(C, Wz);
+
+		const FVector WorldExtent(A[0]+A[1]+A[2], B[0]+B[1]+B[2], C[0]+C[1]+C[2]);
 		return FAABB(WorldCenter - WorldExtent, WorldCenter + WorldExtent);
 	}
 

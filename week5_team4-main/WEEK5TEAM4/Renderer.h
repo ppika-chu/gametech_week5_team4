@@ -511,7 +511,17 @@ public:
 	mutable uint64 DrawCallCount = 0;
 
 	uint64 GetDrawCallCount() const { return DrawCallCount; }
-	void ResetDrawCallCount() { DrawCallCount = 0; }
+	void ResetDrawCallCount()
+	{
+		DrawCallCount = 0;
+
+		LastBoundPipeline = nullptr;
+		LastBoundViewMode = static_cast<EViewModeIndex>(-1);
+		LastBoundStencilRef = 0xFFFFFFFFu;
+		LastBoundSRV0 = nullptr;
+		LastVertexBuffer = nullptr;
+		LastIndexBuffer = nullptr;
+	}
 private:
 	void CreateDeviceAndSwapChain(HWND hWindow);
 	void ReleaseDeviceAndSwapChain();
@@ -561,4 +571,14 @@ private:
 	// 와이어프레임 여부. Prepare에서 갱신하고 BindPipeline이 읽는다.
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.
 	EViewModeIndex ViewModeIndex = EViewModeIndex::VMI_Lit;
+
+	// State Sorting : 직전 draw 한 것과 state 같으면 binding pass
+	mutable const FRenderPipeline* LastBoundPipeline = nullptr;
+	mutable EViewModeIndex LastBoundViewMode = static_cast<EViewModeIndex>(-1);
+	mutable uint32 LastBoundStencilRef = 0xFFFFFFFFu;
+	mutable ID3D11ShaderResourceView* LastBoundSRV0 = nullptr;
+	mutable ID3D11Buffer * LastVertexBuffer = nullptr;
+	mutable UINT LastVertexStride = 0;
+	mutable ID3D11Buffer* LastIndexBuffer = nullptr;
+
 };

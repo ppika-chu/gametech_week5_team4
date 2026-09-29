@@ -26,10 +26,15 @@ void UActorComponent::Tick(float deltaTime)
 {
 }
 
-void UActorComponent::Render(FRenderCollector& RenderCollector)
+void UActorComponent::Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds)
 {
 	// Todo: Do nothing, must override, some components may not call Update()
 	// assert(false);
+}
+
+FAABB UActorComponent::GetBoundingBox() const
+{
+	return FAABB();
 }
 
 void UActorComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const
@@ -38,7 +43,7 @@ void UActorComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const
 	// assert(false);
 }
 
-void UActorComponent::RegisterPickTarget(FRenderCollector& RenderCollector)
+void UActorComponent::RegisterPickTarget(FRenderCollector& RenderCollector, const FAABB& AABB)
 {
 	// 충돌체가 없는 컴포넌트는 픽킹 대상이 아니다.
 }

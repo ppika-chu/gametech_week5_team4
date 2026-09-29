@@ -5,6 +5,7 @@
 #include "Vector.h"
 #include "enum.h"
 #include <utility>
+#include <xmmintrin.h>
 
 struct FMatrix { 
 	float M[4][4];
@@ -46,8 +47,25 @@ struct FMatrix {
 
 	FMatrix operator* (const FMatrix& Other) const
 	{
-		FMatrix result = {};
+		FMatrix result;
 
+		__m128 BRow0 = _mm_loadu_ps(&Other.M[0][0]);
+		__m128 BRow1 = _mm_loadu_ps(&Other.M[1][0]);
+		__m128 BRow2 = _mm_loadu_ps(&Other.M[2][0]);
+		__m128 BRow3 = _mm_loadu_ps(&Other.M[3][0]);
+
+		for (int row = 0; row < 4; ++row)
+		{
+			__m128 R = _mm_mul_ps(_mm_set1_ps(M[row][0]), BRow0);
+			R = _mm_add_ps(R, _mm_mul_ps(_mm_set1_ps(M[row][1]), BRow1));
+			R = _mm_add_ps(R, _mm_mul_ps(_mm_set1_ps(M[row][2]), BRow2));
+			R = _mm_add_ps(R, _mm_mul_ps(_mm_set1_ps(M[row][3]), BRow3));
+			_mm_storeu_ps(&result.M[row][0], R);
+		}
+		
+		return result;
+
+		#if 0
 		for (int row = 0; row < 4;++row) {
 			for (int col = 0;col < 4;++col) {
 				for (int k = 0;k < 4;++k) {
@@ -55,30 +73,27 @@ struct FMatrix {
 				}
 			}
 		}
-		return result;
+		#endif
 	}
 
 	FMatrix operator*(float Scalar) const
-	{ 
+	{
 		FMatrix result;
-		for (int row = 0; row < 4; ++row) {
-			for (int col = 0; col < 4; ++col) {
-				result.M[row][col] = M[row][col] * Scalar;
-			}
+		const __m128 S = _mm_set1_ps(Scalar);
+		for (int row = 0; row < 4; ++row)
+		{
+			_mm_storeu_ps(result.M[row], _mm_mul_ps(_mm_loadu_ps(M[row]), S));
 		}
-
 		return result;
 	}
 
 
 	FMatrix operator+ (const FMatrix& Other) const
-	{ 
-		FMatrix result = {};
-
-		for (int row = 0; row < 4;++row) {
-			for (int col = 0;col < 4;++col) {
-				result.M[row][col] = M[row][col] + Other.M[row][col];
-			}
+	{
+		FMatrix result;
+		for (int row = 0; row < 4; ++row)
+		{
+			_mm_storeu_ps(result.M[row], _mm_add_ps(_mm_loadu_ps(M[row]), _mm_loadu_ps(Other.M[row])));
 		}
 		return result;
 	}
@@ -86,13 +101,11 @@ struct FMatrix {
 
 
 	FMatrix operator- (const FMatrix& Other) const
-	{ 
-		FMatrix result = {};
-
-		for (int row = 0; row < 4;++row) {
-			for (int col = 0;col < 4;++col) {
-				result.M[row][col] = M[row][col] - Other.M[row][col];
-			}
+	{
+		FMatrix result;
+		for (int row = 0; row < 4; ++row)
+		{
+			_mm_storeu_ps(result.M[row], _mm_sub_ps(_mm_loadu_ps(M[row]), _mm_loadu_ps(Other.M[row])));
 		}
 		return result;
 	}
@@ -100,22 +113,22 @@ struct FMatrix {
 
 	FMatrix operator+(float f) const
 	{
-		FMatrix result = {};
-		for (int row = 0; row < 4; ++row) {
-			for (int col = 0; col < 4; ++col) {
-				result.M[row][col] = M[row][col] + f;
-			}
+		FMatrix result;
+		const __m128 S = _mm_set1_ps(f);
+		for (int row = 0; row < 4; ++row)
+		{
+			_mm_storeu_ps(result.M[row], _mm_add_ps(_mm_loadu_ps(M[row]), S));
 		}
 		return result;
 	}
 
 	FMatrix operator-(float f) const
-	{ 
-		FMatrix result={};
-		for (int row = 0; row < 4; ++row) {
-			for (int col = 0; col < 4; ++col) {
-				result.M[row][col] = M[row][col] - f;
-			}
+	{
+		FMatrix result;
+		const __m128 S = _mm_set1_ps(f);
+		for (int row = 0; row < 4; ++row)
+		{
+			_mm_storeu_ps(result.M[row], _mm_sub_ps(_mm_loadu_ps(M[row]), S));
 		}
 		return result;
 	}
@@ -159,13 +172,28 @@ struct FMatrix {
 
 	FMatrix Transpose() const
 	{ 
+		__m128 R0 = _mm_loadu_ps(&M[0][0]);
+		__m128 R1 = _mm_loadu_ps(&M[1][0]);
+		__m128 R2 = _mm_loadu_ps(&M[2][0]);
+		__m128 R3 = _mm_loadu_ps(&M[3][0]);
+		_MM_TRANSPOSE4_PS(R0, R1, R2, R3);
+		
+		FMatrix result;
+		_mm_storeu_ps(&result.M[0][0], R0);
+		_mm_storeu_ps(&result.M[1][0], R1);
+		_mm_storeu_ps(&result.M[2][0], R2);
+		_mm_storeu_ps(&result.M[3][0], R3);
+
+		return result;
+
+		#if 0
 		FMatrix result = {};
 		for (int row = 0; row < 4; ++row) {
 			for (int col = 0; col < 4; ++col) {
 				result.M[row][col] = M[col][row];
 			}
 		}
-		return result;
+		#endif
 	}
 
 	static FMatrix Scale(float n)
@@ -284,19 +312,45 @@ struct FMatrix {
 	// 위치 변환 (w = 1, 이동 포함).  행벡터 규약 v x M
 	[[nodiscard]] FVector TransformPosition(const FVector& V) const
 	{
-		return FVector(
-			V.x * M[0][0] + V.y * M[1][0] + V.z * M[2][0] + M[3][0],
-			V.x * M[0][1] + V.y * M[1][1] + V.z * M[2][1] + M[3][1],
-			V.x * M[0][2] + V.y * M[1][2] + V.z * M[2][2] + M[3][2]);
+		const __m128 Row0 = _mm_loadu_ps(M[0]);
+		const __m128 Row1 = _mm_loadu_ps(M[1]);
+		const __m128 Row2 = _mm_loadu_ps(M[2]);
+		const __m128 Row3 = _mm_loadu_ps(M[3]);
+
+		const __m128 Vx = _mm_set1_ps(V.x);
+		const __m128 Vy = _mm_set1_ps(V.y);
+		const __m128 Vz = _mm_set1_ps(V.z);
+
+		__m128 Result = _mm_mul_ps(Vx, Row0);
+		Result = _mm_add_ps(Result, _mm_mul_ps(Vy, Row1));
+		Result = _mm_add_ps(Result, _mm_mul_ps(Vz, Row2));
+		Result = _mm_add_ps(Result, Row3);
+
+		float Values[4];
+		_mm_storeu_ps(Values, Result);
+
+		return FVector(Values[0], Values[1], Values[2]);
 	}
 
 	// 방향 변환 (w = 0, 이동 제외)
 	[[nodiscard]] FVector TransformVector(const FVector& V) const
 	{
-		return FVector(
-			V.x * M[0][0] + V.y * M[1][0] + V.z * M[2][0],
-			V.x * M[0][1] + V.y * M[1][1] + V.z * M[2][1],
-			V.x * M[0][2] + V.y * M[1][2] + V.z * M[2][2]);
+		const __m128 Row0 = _mm_loadu_ps(M[0]);
+		const __m128 Row1 = _mm_loadu_ps(M[1]);
+		const __m128 Row2 = _mm_loadu_ps(M[2]);
+
+		const __m128 Vx = _mm_set1_ps(V.x);
+		const __m128 Vy = _mm_set1_ps(V.y);
+		const __m128 Vz = _mm_set1_ps(V.z);
+
+		__m128 Result = _mm_mul_ps(Vx, Row0);
+		Result = _mm_add_ps(Result, _mm_mul_ps(Vy, Row1));
+		Result = _mm_add_ps(Result, _mm_mul_ps(Vz, Row2));
+
+		float Values[4];
+		_mm_storeu_ps(Values, Result);
+
+		return FVector(Values[0], Values[1], Values[2]);
 	}
 
 	// General 4x4 inverse, including perspective projection. Keep Inverse() as
@@ -393,10 +447,16 @@ struct FMatrix {
 		R.M[3][0] = -(M[3][0] * R.M[0][0] + M[3][1] * R.M[1][0] + M[3][2] * R.M[2][0]);
 		R.M[3][1] = -(M[3][0] * R.M[0][1] + M[3][1] * R.M[1][1] + M[3][2] * R.M[2][1]);
 		R.M[3][2] = -(M[3][0] * R.M[0][2] + M[3][1] * R.M[1][2] + M[3][2] * R.M[2][2]);
-
+		
 		return R;
 	}
 
+	// 월드 transform 행렬일 때, 이동 벡터만 뽑아오는 용도
+	FVector GetOrigin() const
+	{
+		return FVector(M[3][0], M[3][1], M[3][2]); 		
+	}
+	
 	// end Struct Matrix
 };
 
@@ -429,4 +489,5 @@ inline const FMatrix FMatrix::UEToDX = {
 	FVector4(1, 0, 0, 0),
 	FVector4(0, 1, 0, 0),
 	FVector4(0, 0, 0, 1)
+
 };

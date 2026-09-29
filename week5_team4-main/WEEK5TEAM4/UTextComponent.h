@@ -11,6 +11,7 @@
 #include "Json/json.hpp"
 #include "JsonUtil.h"
 #include "FTextBuilder.h"
+#include "EngineMathLibrary.h"
 
 class UPlaneComponent : public UPrimitiveComponent
 {
@@ -63,12 +64,21 @@ public:
 		SetRelativeRotation(ParentTransform.Rotation);
 	}
 
-	void Render(FRenderCollector& RenderCollector) override
+	void Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds) override
 	{
 		if (!FShowFlags::Get().IsEnabled(EShowFlag::Primitive))
 		{
 			return;
 		}
+
+		if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+		{
+			++RenderCollector.CulledObjectCount;
+			return;
+		}
+
+		// actor 당 한 번 count
+		++RenderCollector.DrawnObjectCount;
 
 		FTransform PivotTransform = GetTransformMatrix();
 
@@ -96,7 +106,7 @@ public:
 			return FAABB();
 		}
 
-		return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
+		return mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix());
 	}
 
 	const TArray<FVertex>& GetMeshVertices() const override
@@ -269,7 +279,7 @@ public:
 		SetRelativeLocation(ParentTransform.Location + FVector(0.f, 0.f, 1.f));
 	}
 
-	void Render(FRenderCollector& RenderCollector) override
+	void Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds) override
 	{
 		// Show Flags에서 끄면 쿼드를 아예 만들지 않는다.
 		// 만들고 거르는 게 아니라 글자 수만큼의 계산 자체가 사라진다.

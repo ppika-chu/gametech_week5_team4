@@ -7,6 +7,8 @@
 #include "Console.h"
 #include "ObjectFactory.h"
 
+#include "OptimizationFlags.h"
+
 UWorld::~UWorld()
 {
 	for (AActor* removeActor : mActors)
@@ -31,7 +33,7 @@ void UWorld::SerializeClass(json::JSON& outJson) const
 }
 
 void UWorld::DeserializeClass(const json::JSON& inJson)
-{
+{ 
 	UObject::DeserializeClass(inJson);
 
 	const json::JSON& propertiesJson = inJson.at("Properties");
@@ -59,6 +61,19 @@ void UWorld::DeserializeClass(const json::JSON& inJson)
 		AActor* actor = static_cast<AActor*>(FObjectFactory::LoadObject(classInfo, actorJson));
 		AddActor(actor);
 	}
+
+	TArray<UPrimitiveComponent*> AllPrimitives;
+	for (AActor* Actor : mActors)
+	{
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			{
+				AllPrimitives.Add(Primitive);
+			}
+		}
+	}
+	mBVH.Build(AllPrimitives);
 }
 
 void UWorld::AddActor(AActor* actor)
@@ -70,6 +85,12 @@ void UWorld::AddActor(AActor* actor)
 
 	// TODO: 전처리를 통해 에디터 모드가 아니면 아래 코드를 컴파일하지 않게 막아야함.
 	actor->CreateEditorComponents();
+
+	for (UActorComponent* Component : actor->GetComponents())
+	{
+		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			mBVH.Insert(Primitive);
+	}
 }
 
 bool UWorld::RemoveActor(uint32 componentUUID)
@@ -78,6 +99,13 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 	if (componentIndex == -1)
 	{
 		return false;
+	}
+
+	AActor* actor = mActors[componentIndex];
+	for (UActorComponent* Component : actor->GetComponents())
+	{
+		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+			mBVH.Remove(Primitive);
 	}
 
 	//mActors.RemoveAt(componentIndex, 1);
@@ -101,10 +129,44 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);
 	outCollector.PickTargets.Reset(DEFAULT_RESERVE_MEM);
 
-	for (AActor* actor : mActors)
+	const bool bUseBVH = outCollector.Frustum && GCullingMode == ECullingMode::BVH;
+
+	if (bUseBVH)
 	{
-		actor->Render(outCollector);
+		mBVH.QueryFrustum(*outCollector.Frustum, [&outCollector](UPrimitiveComponent* Component)
+		{	
+			const FAABB WorldBounds = Component->GetBoundingBox();
+			Component->Render(outCollector, WorldBounds);
+
+			// 브루트포스 피킹을 쓸 때만 후보 목록이 필요하다.
+			if (GPickingMode == EPickingMode::BruteForce)
+			{
+				Component->RegisterPickTarget(outCollector, WorldBounds);
+			}
+		});
+
+		if (FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
+		{
+			for (AActor* actor : mActors)
+			{
+				for (UActorComponent* component : actor->GetComponents())
+				{
+					if (!component->Cast<UPrimitiveComponent>())
+					{
+						component->Render(outCollector, component->GetBoundingBox());
+					}
+				}
+			}
+		}
 	}
+	else{
+		
+		for (AActor* actor : mActors)
+		{
+			actor->Render(outCollector);
+		}
+	}
+	outCollector.CulledObjectCount = GetBVH().GetComponentNum() - outCollector.DrawnObjectCount;
 }
 
 int32 UWorld::getActorIndex(uint32 actorUUID) const

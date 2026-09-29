@@ -37,6 +37,8 @@
 #include "FTextBuilder.h"
 #include "FSceneConverter.h"
 
+#include "OptimizationFlags.h"
+
 FSceneManager::FSceneManager()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -483,13 +485,50 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PushFont(nullptr, 20.0f);
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
 
+			// FPS
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("FPS");
 			ImGui::PopStyleColor();
 
-			ImGui::Text("FPS: %.1f", guiReference.FrameTimer->GetFPS());
-			ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
+			const float FrameTimeMs = guiReference.FrameTimer->GetFrameTimeMs();
+			const float GPUTimeMs = guiReference.GraphicsManager->GetGpuRenderTime();
+			const float TrueFrameTimeMs = (std::max)(FrameTimeMs, GPUTimeMs);
+
+			// 지수 이동 평균. Alpha가 작을수록 더 부드럽고 더 느리게 따라온다.
+			static constexpr float Alpha = 0.2f;
+			static float SmoothFrameMs = TrueFrameTimeMs;
+			static float SmoothGpuMs = GPUTimeMs;
+
+			SmoothFrameMs += (TrueFrameTimeMs - SmoothFrameMs) * Alpha;
+			SmoothGpuMs   += (GPUTimeMs       - SmoothGpuMs)   * Alpha;
+
+			const float ShownFPS = SmoothFrameMs > 0.f ? 1000.0f / SmoothFrameMs : 0.f;
+			const float ShownCpuMs = (std::max)(SmoothFrameMs - SmoothGpuMs, 0.f);
+
+			ImGui::Text("FPS: %.1f", ShownFPS);
+			ImGui::Text("Frame Time: %.2f ms", SmoothFrameMs);
+			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
+			// CPU / GPU
+			// ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			// ImGui::SeparatorText("Bottleneck");
+			// ImGui::PopStyleColor();
+
+			// ImGui::Text("GPU Time: %.2f ms", SmoothGpuMs);
+			// ImGui::Text("CPU Time (est.): %.2f ms", ShownCpuMs);
+
+			// if (SmoothFrameMs > 0.f)
+			// {
+			// 	const float GPURatio = SmoothGpuMs / SmoothFrameMs;
+			// 	const bool bGPUBound = GPURatio > 0.8f;
+
+			// 	ImGui::TextColored(
+			// 		bGPUBound? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+			// 		"GPU Ratio: %.2f %%", GPURatio*100.0f);
+	
+			// }
+
+			// Picking
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Picking");
 			ImGui::PopStyleColor();
@@ -499,6 +538,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::Text("Last Picking Time: %.2f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
 			
+			// Draw Calls / Culling
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Draw Calls / Culling");
 			ImGui::PopStyleColor();
@@ -518,7 +558,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 #else
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
-	updateObjectListPanelGUI(guiReference);
+	// updateObjectListPanelGUI(guiReference);
 	ConsoleWindow::Get().Process(mBottomBarHeight);
 	mContentBrowser.SetAssetManager(guiReference.AssetManager);
 	mContentBrowser.Render(mBottomBarHeight);
@@ -552,6 +592,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"Circle",
 		"SpotLight",
 		"Explosion",
+		"Apple"
 	};
 
 	int32 ActorTypeIndex = static_cast<int32>(mGuiInputField.PrimitiveType);
@@ -609,6 +650,15 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 				NewActor->AddRootSceneComponent(MeshComponent);
 			}
+			else if (strcmp(ActorTypeName, "Apple") == 0)
+			{
+				NewActor = FObjectFactory::ConstructObject<AActor>();
+
+				UStaticMeshComponent* MeshComponent = FObjectFactory::ConstructObject<UStaticMeshComponent>(FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1));
+				MeshComponent->SetMesh(FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(FName("Assets/Meshes/apple_mid.uasset"), true));
+				NewActor->AddRootSceneComponent(MeshComponent);
+				
+			}	
 			else
 			{
 				UE_LOG_ERROR("Unknown actor class: %s", ActorTypeName);
@@ -701,7 +751,50 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 				e.what());
 		}
 	}
+	
+	ImGui::SeparatorText("Optimization");
+	{
+		// 배타 선택은 콤보로
+		int32 CullingIndex = static_cast<int32>(GCullingMode);
+		if (ImGui::Combo("Culling", &CullingIndex, GCullingModeNames, IM_ARRAYSIZE(GCullingModeNames)))
+		{
+			GCullingMode = static_cast<ECullingMode>(CullingIndex);
+		}
 
+		int32 PickingIndex = static_cast<int32>(GPickingMode);
+		if (ImGui::Combo("Picking", &PickingIndex, GPickingModeNames, IM_ARRAYSIZE(GPickingModeNames)))
+		{
+			GPickingMode = static_cast<EPickingMode>(PickingIndex);
+		}
+
+		// 항목 추가 시, OptimizationFlags.h의 GOptFlagInfos에 적으면 됨.
+		for (const FOptFlagInfo& Info : GOptFlagInfos)
+		{
+			bool bEnabled = IsOptEnabled(Info.Flag);
+			if (ImGui::Checkbox(Info.Name, &bEnabled))
+			{
+				GOptEnabled[static_cast<uint8>(Info.Flag)] = bEnabled;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("%s", Info.Tooltip);
+			}
+		}
+
+		if (ImGui::Button("All on"))
+		{
+			GCullingMode = ECullingMode::BVH;
+			GPickingMode = EPickingMode::BVHFrustum;
+			for (bool& b : GOptEnabled) { b = true; }
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("All Off"))
+		{
+			GCullingMode = ECullingMode::Off;
+			GPickingMode = EPickingMode::BruteForce;
+			for (bool& b : GOptEnabled) { b = false; }
+		}
+	}
 
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
@@ -898,6 +991,13 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 		if (ImGui::DragFloat3("Translation", &translationInput.x, 0.1f))
 		{
 			mSelectedActor->SetLocation(translationInput);
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		if (ImGui::DragFloat3("Rotation", &rotationInput.x, 0.1f))
@@ -907,11 +1007,26 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				rotationInput.z, // Yaw
 				rotationInput.x  // Roll
 				});
+
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		if (ImGui::DragFloat3("Scale", &scaleInput.x, 0.1f, MIN_SCALE, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp))
 		{
 			mSelectedActor->SetScale(scaleInput);
+			for (UActorComponent* Component : mSelectedActor->GetComponents())
+			{
+				if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+				{
+					GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 
 		int componentIndex = 0;

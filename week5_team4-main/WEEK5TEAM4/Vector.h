@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MathUtility.h"
+#include <immintrin.h>   // FVector4 SIMD 연산 (_mm_dp_ps는 SSE4.1)
 
 struct FVector2
 {
@@ -172,49 +173,47 @@ typedef struct FVector4
 	FVector4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
 	FVector4(const FVector3& v, float _w) : x(v.x), y(v.y), z(v.z), w(_w) {}
 
+	// 아래 연산들은 x,y,z,w 4개가 연속으로 붙어 있는 구조(위 union의 v[4])라 SIMD 한 번에 처리된다.
 	FVector4 operator+(const FVector4& Others) const
 	{
-		return FVector4(x + Others.x, y + Others.y, z + Others.z, w + Others.w);
+		FVector4 result;
+		_mm_storeu_ps(result.v, _mm_add_ps(_mm_loadu_ps(v), _mm_loadu_ps(Others.v)));
+		return result;
 	}
 
 	FVector4 operator-(const FVector4& Others) const
 	{
-		return FVector4(x - Others.x, y - Others.y, z - Others.z, w - Others.w);
+		FVector4 result;
+		_mm_storeu_ps(result.v, _mm_sub_ps(_mm_loadu_ps(v), _mm_loadu_ps(Others.v)));
+		return result;
 	}
 
 	FVector4 operator*(float Scalar) const
 	{
-		return FVector4(x * Scalar, y * Scalar, z * Scalar, w * Scalar);
+		FVector4 result;
+		_mm_storeu_ps(result.v, _mm_mul_ps(_mm_loadu_ps(v), _mm_set1_ps(Scalar)));
+		return result;
 	}
 
 	void operator+=(const FVector4& Others)
 	{
-		x += Others.x;
-		y += Others.y;
-		z += Others.z;
-		w += Others.w;
+		_mm_storeu_ps(v, _mm_add_ps(_mm_loadu_ps(v), _mm_loadu_ps(Others.v)));
 	}
 
 	void operator-=(const FVector4& Others)
 	{
-		x -= Others.x;
-		y -= Others.y;
-		z -= Others.z;
-		w -= Others.w;
+		_mm_storeu_ps(v, _mm_sub_ps(_mm_loadu_ps(v), _mm_loadu_ps(Others.v)));
 	}
 
 	void operator*=(float Scalar)
 	{
-		x *= Scalar;
-		y *= Scalar;
-		z *= Scalar;
-		w *= Scalar;
+		_mm_storeu_ps(v, _mm_mul_ps(_mm_loadu_ps(v), _mm_set1_ps(Scalar)));
 	}
 
-	//내적
+	//내적 (_mm_dp_ps는 SSE4.1)
 	inline static float dot(const FVector4& A, const FVector4& B)
 	{
-		return A.x * B.x + A.y * B.y + A.z * B.z + A.w * B.w;
+		return _mm_cvtss_f32(_mm_dp_ps(_mm_loadu_ps(A.v), _mm_loadu_ps(B.v), 0xFF));
 	}
 
 	//4차원에는 외적이 없다.

@@ -8,6 +8,7 @@
 
 class FCamera;
 class UPrimitiveComponent;
+struct FFrustum;
 
 enum class ERenderBlendMode
 {
@@ -28,6 +29,7 @@ struct FRenderInfo
 	TSharedPtr<FTexture2DAsset> Texture;
 	FVector2 UVOffset = { 0.f, 0.f };
 	FMatrix Model;
+	float ViewSpaceZ = 0.f;
 	uint32 ObjectInternalIndex;
 	FVector4 Color = { 1.f, 1.f, 1.f, 1.f };
 	bool UseVertexColor = true;
@@ -71,9 +73,10 @@ public:
 	enum { DEFAULT_RESERVE_MEM = 1024U };
 
 	FCamera* Camera = nullptr;
+	const FFrustum* Frustum = nullptr;		// viewport의 frustum
 
-	TArray<FRenderInfo>     RenderInfos;   // 메시 패스
-	TArray<FRenderLineInfo> LineInfos;     // 라인 패스
+	TArray<FRenderInfo>     RenderInfos;   	// 메시 패스
+	TArray<FRenderLineInfo> LineInfos;     	// 라인 패스
 	TArray<UPrimitiveComponent*> PickTargets;
 
 	// 전체 액터 수 = DrawnObjectCount + CulledObjectCount

@@ -4,7 +4,7 @@
 #include "Actor.h"
 
 #include "RenderInfo.h"
-//struct FRenderInfo;
+#include "FBVH.h"
 
 class UWorld final : public UObject
 {
@@ -24,11 +24,11 @@ public:
 
 	void Tick(float deltaTime);
 	void Render(float deltaTime, FRenderCollector& outCollector);
-	//void Render();
-
+	FBVH& GetBVH() { return mBVH; }
 
 private:
 	int32 getActorIndex(uint32 actorUUID) const;
+	FBVH mBVH;
 
 private:
 	enum

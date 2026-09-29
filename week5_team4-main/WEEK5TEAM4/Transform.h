@@ -21,7 +21,22 @@ struct FTransform
 
 	FMatrix MakeMatrix() const
 	{
-		return  FMatrix::Scale(Scale) * FMatrix::Rotate(Rotation) * FMatrix::Translation(Location);
+		FMatrix Result = FMatrix::Rotate(Rotation);
+		
+		__m128 Row0 = _mm_mul_ps(_mm_loadu_ps(&Result.M[0][0]), _mm_set1_ps(Scale.x));		
+		__m128 Row1 = _mm_mul_ps(_mm_loadu_ps(&Result.M[1][0]), _mm_set1_ps(Scale.y));		
+		__m128 Row2 = _mm_mul_ps(_mm_loadu_ps(&Result.M[2][0]), _mm_set1_ps(Scale.z));
+		
+		_mm_storeu_ps(&Result.M[0][0], Row0);
+		_mm_storeu_ps(&Result.M[1][0], Row1);
+		_mm_storeu_ps(&Result.M[2][0], Row2);
+
+		Result.M[3][0] = Location.x;
+		Result.M[3][1] = Location.y;
+		Result.M[3][2] = Location.z;
+
+		return Result;
+
 	}
 
 	FMatrix InverseMatrix() const

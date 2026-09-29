@@ -10,6 +10,7 @@
 #include "FAssetManager.h"
 #include "FTexture2DImporter.h"
 #include "AssetFileIOs.h"
+#include "LOD.h"
 
 namespace
 {
@@ -119,6 +120,17 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 	
 	VertexBuffer = InRenderer.CreateVertexBuffer(InBuildData.Vertices.Data(), static_cast<uint32>(InBuildData.Vertices.Num()));
 	IndexBuffer = InRenderer.CreateIndexBuffer(InBuildData.Indices.Data(), static_cast<uint32>(InBuildData.Indices.Num()));
+
+	if (!Indices.IsEmpty() && !Sections.IsEmpty())
+	{
+		LOD LodBuilder;
+
+		// LOD 1
+		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.5f, InRenderer));
+		
+		// LOD 2
+		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.25f, InRenderer));
+	}
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> FStaticMeshAsset::GetVertexBuffer() const

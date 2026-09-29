@@ -3,10 +3,12 @@
 #include "FAssetManager.h"
 #include "RenderInfo.h"
 #include "ShowFlags.h"
+#include "OptimizationFlags.h"
 #include "Actor.h"
 #include "JsonUtil.h"
 #include "EngineMathLibrary.h"
 #include "FLogManager.h"
+#include "EngineMathLibrary.h"
 
 void UStaticMeshComponent::Initialize(const FString& InAssetPathFileName, FVector Location,
     FRotator Rotation, FVector Scale)
@@ -84,11 +86,11 @@ void UStaticMeshComponent::DeserializeClass(const json::JSON& inJson)
 			break;
 		}
 
-		mUVOffsets[i] = UVOffsets[i];
+		mUVOffsets[i] = UVOffsets[i]; 
 	}
 }
 
-void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
+void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds)
 {
     if (!mMeshAsset)
     {
@@ -100,12 +102,47 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+
+    // Frustum Culling
+    // BVH 모드에서도 남겨둔다. BVH는 리프(4개 묶음) 단위라 경계에 걸친 것은 여기서 정밀하게 걸러진다.
+    if (GCullingMode != ECullingMode::Off
+        && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+    {
+        ++RenderCollector.CulledObjectCount;
+        return;
+    }
+
+    const TArray<FStaticMeshSection>* SectionsToUse = &mMeshAsset->GetSections();
+    Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBufferToUse = mMeshAsset->GetVertexBuffer();
+    Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
+
+    // 너무 작은 픽셀은 LOD
+    if (RenderCollector.Camera && IsOptEnabled(EOptFlag::LOD))
+    {
+        const float RadiusSq = ((WorldBounds.Max - WorldBounds.Min) * 0.5f).LengthSquared();
+        const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+        const float DistanceSq = (Center - RenderCollector.Camera->Transform.Location).LengthSquared();
+
+        constexpr float LODDistanceRatios[] = { 30.0f, 60.0f }; // LOD1, LOD2
+    
+        for (int32 i = 0; i < mMeshAsset->GetLODCount() && i < 2; ++i)
+        {
+            if (DistanceSq > RadiusSq * LODDistanceRatios[i] * LODDistanceRatios[i])
+            {
+                const FMeshLOD& LOD = mMeshAsset->GetLOD(i);
+                SectionsToUse = &LOD.Sections;
+                VertexBufferToUse = LOD.VertexBuffer->Buffer;
+                IndexBufferToUse = LOD.IndexBuffer->Buffer;
+            }   
+        }
+    }
+
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
-    for (int32 SectionIndex = 0; SectionIndex < mMeshAsset->GetSections().Num(); ++SectionIndex)
+    for (int32 SectionIndex = 0; SectionIndex < SectionsToUse->Num(); ++SectionIndex)
     {
-        const FStaticMeshSection& Section = mMeshAsset->GetSections()[SectionIndex];
+        const FStaticMeshSection& Section = (*SectionsToUse)[SectionIndex];
 
         TSharedPtr<FMaterialAsset> Material = mMaterialAssets[SectionIndex];
 
@@ -129,18 +166,18 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         }
 
         FRenderInfo RenderInfo;
-        RenderInfo.VertexBuffer = mMeshAsset->GetVertexBuffer();
-        RenderInfo.IndexBuffer = mMeshAsset->GetIndexBuffer();
+        RenderInfo.VertexBuffer = VertexBufferToUse;
+        RenderInfo.IndexBuffer = IndexBufferToUse;
         RenderInfo.StartIndex = Section.FirstIndex;
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
-        RenderInfo.Model = GetTransformMatrix().MakeMatrix();
+        RenderInfo.Model = GetCacheWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
 
-        RenderCollector.RenderInfos.Add(RenderInfo);
+        RenderCollector.RenderInfos.Add(std::move(RenderInfo));
     }
 }
 
@@ -151,7 +188,7 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
         return FAABB();
     }
 
-    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
+    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix());
 }
 
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)

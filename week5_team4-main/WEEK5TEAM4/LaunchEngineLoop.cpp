@@ -27,6 +27,7 @@
 #include "UStaticMeshComponent.h"
 #include "Serializers.h"
 #include "NativeFileDialog.h"
+#include "EngineMathLibrary.h"
 
 #if IS_OBJ_VIEWER
 #include "FObjViewer.h"
@@ -217,7 +218,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	
 
 	mGraphicsManager->UpdateGpuRenderTime();
-	if (ConsoleWindow::Get().bShowStatRender)
+	if (ConsoleWindow::Get().bShowStatRender || ConsoleWindow::Get().bShowOptimization)
 	{
 		mGraphicsManager->BeginGpuRenderTimer();
 	}
@@ -251,6 +252,10 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		FMatrix ViewProjection = Camera.GetViewMatrix() * Camera.GetUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio);
 		FMatrix InvViewProjection = Camera.GetInverseUnifiedProjectionMatrix(Camera.mOrthoDistance, CurrentRatio) * Camera.GetViewMatrix().AffineInverse();
 
+		// Frustum 저장
+		const FFrustum ViewFrustum = FFrustum::FromViewProjection(ViewProjection);
+		RenderCollector.Frustum = &ViewFrustum;
+
 		mSceneManager->Render(deltaTime, RenderCollector);
 
 		// 마우스 피킹 처리
@@ -263,7 +268,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && bIsAssetDragging)
 		{
-			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector);
+			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector, mSceneManager->GetCurrentWorld()->GetBVH());
 			if (HitActor)
 			{
 				mSceneManager->SetSelectedActor(HitActor);
@@ -325,6 +330,15 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			mGraphicsManager->Render();
 
 			CurrentViewport->Client->mGizmo.Render(SelectedActor, CurrentViewport->Client->mCamera.Transform.Location, CurrentViewport->Window->Rect, ViewProjection, CurrentViewport->Client->IsOrtho(), CurrentViewport->Client->GetCamera().mOrthoDistance);
+		
+			if (SelectedActor && CurrentViewport->Client->mGizmo.IsDragging())
+			{
+				for (UActorComponent* Component : SelectedActor->GetComponents())
+				{
+					if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+						mSceneManager->GetCurrentWorld()->GetBVH().Move(Primitive);
+				}
+			}
 		}
 	}
 

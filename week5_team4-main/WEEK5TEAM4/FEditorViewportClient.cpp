@@ -12,12 +12,14 @@
 #include "SceneManager.h"
 #include "MathUtility.h"
 #include "GraphicsManager.h"
+#include "OptimizationFlags.h"
 #include "Renderer.h"
 #include <cstdio>
 #include "UTextComponent.h"
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
+#include "FBVH.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -71,7 +73,7 @@ void FEditorViewportClient::SetViewportType(EViewportType InViewportType)
 	}
 }
 
-AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector)
+AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector, FBVH& BVH)
 {
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
@@ -104,21 +106,34 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
-	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
-	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
+	if (GPickingMode != EPickingMode::BruteForce)
 	{
-		// 충돌 검사할 때마다 +1
-		++PickTestCount;
-		float HitT = FLT_MAX;
-		if (!PickTarget->RayCastComponent(PickingRay, HitT))
-		{
-			continue;
-		}
+		// Frustum을 넘기면 화면 밖 오브젝트는 후보에서 빠진다.
+		const FFrustum* PickFrustum = (GPickingMode == EPickingMode::BVHFrustum)
+			? RenderCollector.Frustum : nullptr;
 
-		if (HitT < NearlistT)
+		UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount, PickFrustum);
+		NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
+	}
+	else
+	{
+		// 브루트포스: RegisterPickTarget이 모아둔 후보 전체를 검사한다.
+		// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
+		for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 		{
-			NearlistT = HitT;
-			NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
+			// 충돌 검사할 때마다 +1
+			++PickTestCount;
+			float HitT = FLT_MAX;
+			if (!PickTarget->RayCastComponent(PickingRay, HitT))
+			{
+				continue;
+			}
+
+			if (HitT < NearlistT)
+			{
+				NearlistT = HitT;
+				NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
+			}
 		}
 	}
 

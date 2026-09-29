@@ -4,6 +4,7 @@
 
 #include "Transform.h"
 #include "JsonUtil.h"
+#include "OptimizationFlags.h"
 
 void USceneComponent::Initialize(FVector location, FRotator rotation, FVector scale3D)
 {
@@ -66,6 +67,7 @@ FVector USceneComponent::GetRelativeLocation() const
 void USceneComponent::SetRelativeLocation(FVector location)
 {
 	mRelativeLocation = location;
+	mbMatrixDirty = true;
 }
 
 FRotator USceneComponent::GetRelativeRotation() const
@@ -76,6 +78,7 @@ FRotator USceneComponent::GetRelativeRotation() const
 void USceneComponent::SetRelativeRotation(FRotator rotation)
 {
 	mRelativeRotation = rotation;
+	mbMatrixDirty = true;
 }
 
 FVector USceneComponent::GetRelativeScale3D() const
@@ -86,9 +89,21 @@ FVector USceneComponent::GetRelativeScale3D() const
 void USceneComponent::SetRelativeScale3D(FVector scale)
 {
 	mRelativeScale3D = scale;
+	mbMatrixDirty = true;
 }
 
 FTransform USceneComponent::GetTransformMatrix() const
 {
 	return FTransform(mRelativeLocation, mRelativeRotation, mRelativeScale3D);
+}
+
+const FMatrix& USceneComponent::GetCacheWorldMatrix() const
+{	
+	// 캐싱을 끄면 매번 다시 계산한다 (비교 측정용).
+	if (mbMatrixDirty || !IsOptEnabled(EOptFlag::TransformCache))
+	{
+		mCacheWorldMatrix = GetTransformMatrix().MakeMatrix();
+		mbMatrixDirty = false;
+	}
+	return mCacheWorldMatrix;
 }

@@ -8,6 +8,8 @@
 #include "ObjectFactory.h"
 #include "UTextComponent.h"
 #include "FEditorViewportClient.h"
+#include "OptimizationFlags.h"
+#include <algorithm>
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
@@ -172,7 +174,7 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 		RenderInfo.IndexBuffer = mHighlightIndexBuffer->Buffer;
 		RenderInfo.StartIndex = 0;
 		RenderInfo.IndexCount = static_cast<uint32>(Indices.Num());
-		RenderInfo.Model = Primitive->GetTransformMatrix().MakeMatrix();
+		RenderInfo.Model = Primitive->GetCacheWorldMatrix();
 
 		mRenderer->RenderPrimitiveIndexed(mHighlightMarkPipeline, RenderInfo, 1);
 	}
@@ -200,31 +202,66 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 void FGraphicsManager::Render()
 {
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
+	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
+
+	if (IsOptEnabled(EOptFlag::DrawCallSorting))
+	{
+		// 정렬 키를 미리 한 번씩만 계산한다. 비교자 안에서 계산하면 N log N 배로 곱해진다.
+		for (FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
+		{
+			RenderInfo.ViewSpaceZ = mViewMatrix.TransformPosition(RenderInfo.Model.GetOrigin()).z;
+		}
+
+		// state sorting : 같은 텍스처 / 메시끼리 묶어서 캐시 hit 높이기
+		std::sort(mRenderCollector.RenderInfos.begin(), mRenderCollector.RenderInfos.end(),
+				[&](const FRenderInfo& A, const FRenderInfo& B)
+			{
+				// 거리 구간을 나눔.
+				constexpr float BucketSize = 100.0f;
+
+				const int32 BucketA = static_cast<int32>(A.ViewSpaceZ / BucketSize);
+				const int32 BucketB = static_cast<int32>(B.ViewSpaceZ / BucketSize);
+
+				// 1차 sort: 대략 거리 구간 나누기
+				if (BucketA != BucketB)
+					return BucketA < BucketB;
+
+				// 2차 sort : 같은 버킷이면 텍스처로 묶기
+				if (A.Texture.get() != B.Texture.get())
+					return A.Texture.get() < B.Texture.get();
+
+				// 3차 sort : 같은 버킷이고 같은 텍스처면 같은 메시로 묶기
+				return A.VertexBuffer.Get() < B.VertexBuffer.Get();
+			});
+	}
+
 
 	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 	{
 		if (RenderInfo.Texture)
 		{
-			mMeshPipeline->ClearShaderResource();
-			mMeshPipeline->ClearSamplerState();
+			if (RenderInfo.Texture != mLastBoundTexture)
+			{
+				mMeshPipeline->ClearShaderResource();
+				mMeshPipeline->ClearSamplerState();
+				mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
+				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+				mLastBoundTexture = RenderInfo.Texture;
+			}
 
 			FConstants Constants{};
-			Constants.Matrix = RenderInfo.Model;
+			Constants.Matrix = RenderInfo.Model * mViewUnifiedProjectionMatrix;
 			Constants.Color = RenderInfo.Color;
 			Constants.UseVertexColor = RenderInfo.UseVertexColor;
 			Constants.HasTexture = RenderInfo.Texture ? 1 : 0;
 			Constants.UVOffset = RenderInfo.UVOffset;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
-			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
-
-			mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
-
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
 		}
 		else
 		{
+			mLastBoundTexture = nullptr;
 			mRenderer->RenderPrimitiveIndexed(RenderInfo);
 		}
 	}
