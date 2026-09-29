@@ -225,9 +225,15 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
         }
         else
         {
-            // TODO : Ray 시작점에 더 가까운 자식을 먼저 스택에 넣는 로직 추가
-            Stack.Add(CurrentNode.Left);
-            Stack.Add(CurrentNode.Right);
+            const FVector& Origin = Ray.Near;
+            const FVector LeftCenter = (Nodes[CurrentNode.Left].Bounds.Min + Nodes[CurrentNode.Left].Bounds.Max) * 0.5f;
+            const FVector RightCenter = (Nodes[CurrentNode.Right].Bounds.Min + Nodes[CurrentNode.Right].Bounds.Max) * 0.5f;
+
+            const float LeftDistSq = FVector::LengthSquared(LeftCenter, Origin);
+            const float RightDistSq = FVector::LengthSquared(RightCenter, Origin);
+
+            if (LeftDistSq < RightDistSq)   {Stack.Add(CurrentNode.Right); Stack.Add(CurrentNode.Left);}
+            else                            {Stack.Add(CurrentNode.Left); Stack.Add(CurrentNode.Right);}
         }
     }
     return NearestComponent;

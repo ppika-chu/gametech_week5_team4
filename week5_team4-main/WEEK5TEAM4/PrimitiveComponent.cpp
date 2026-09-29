@@ -19,6 +19,8 @@
 #include "Plane.h"
 #include "ShowFlags.h"
 
+#include <xmmintrin.h>
+
 UPrimitiveComponent::UPrimitiveComponent()
 {
 }
@@ -57,14 +59,14 @@ void UPrimitiveComponent::DeserializeClass(const json::JSON& inJson)
 	USceneComponent::DeserializeClass(inJson);
 }
 
-void UPrimitiveComponent::Render(FRenderCollector& RenderCollector)
+void UPrimitiveComponent::Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds)
 {
 }
 
-void UPrimitiveComponent::RegisterPickTarget(FRenderCollector& RenderCollector)
+void UPrimitiveComponent::RegisterPickTarget(FRenderCollector& RenderCollector, const FAABB& WorldBounds)
 {
 	// Picking 후보에 넣기 전 Frustum 안에 있는지 확인
-	if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(GetBoundingBox()))
+	if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
 	{
 		return;
 	}
@@ -89,7 +91,7 @@ const TArray<uint32>& UPrimitiveComponent::GetMeshIndices() const
 
 bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float& OutHitT) const
 {
-	const FMatrix WorldMatrix = GetTransformMatrix().MakeMatrix();
+	const FMatrix WorldMatrix = GetCacheWorldMatrix();
 
 	// AABB 충돌체를 이용한 광선-메시 충돌 최적화
 	const FAABB BoundingBox = GetBoundingBox();
@@ -103,38 +105,96 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 	const TArray<uint32>& indices = GetMeshIndices();
 
 	const FMatrix WorldToLocal = WorldMatrix.AffineInverse();
+	// 역행렬이 존재하지 않으면(스케일이 작아 det이 0에 가까운 경우) RayCast 대상에서 제외
 	if (WorldToLocal == FMatrix::Zero)
-	{
-		// 역행렬이 존재하지 않으면(스케일이 작아 det이 0에 가까운 경우) RayCast 대상에서 제외
 		return false;
-	}
 
 	const FVector LocalNear = WorldToLocal.TransformPosition(PickingRay.Near);
 	const FVector LocalFar = WorldToLocal.TransformPosition(PickingRay.Far);
+	const FVector D = LocalFar - LocalNear;
+
+	const __m128 OriginX = _mm_set1_ps(LocalNear.x);
+	const __m128 OriginY = _mm_set1_ps(LocalNear.y);
+	const __m128 OriginZ = _mm_set1_ps(LocalNear.z);
+	const __m128 DirX = _mm_set1_ps(D.x);
+	const __m128 DirY = _mm_set1_ps(D.y);
+	const __m128 DirZ = _mm_set1_ps(D.z);
+	const __m128 Epsilon = _mm_set1_ps(1e-6f);
+	const __m128 Zero = _mm_setzero_ps();
+	const __m128 One = _mm_set1_ps(1.0f);
 
 	bool bHit = false;
 	float NearestT = FLT_MAX;
 
-	// 삼각형 리스트라 정점 3개씩 묶인다
-	for (int32 i = 0; i < indices.Num(); i += 3)
+	const int32 TriCount = indices.Num() / 3;
+	for (int32 TriBase = 0; TriBase < TriCount; TriBase += 4)
 	{
-		const FVector V0 = vertices[indices[i]].GetPosition();
-		const FVector V1 = vertices[indices[i + 1]].GetPosition();
-		const FVector V2 = vertices[indices[i + 2]].GetPosition();
+		const int32 Remaining = (std::min)(4, TriCount - TriBase);
 
-		float OutT, OutU, OutV;
-		if (RayIntersectsTriangle(LocalNear, LocalFar, V0, V1, V2, OutT, OutU, OutV) && OutT < NearestT)
+		float V0x[4], V0y[4], V0z[4];
+		float E1x[4], E1y[4], E1z[4];
+		float E2x[4], E2y[4], E2z[4];
+
+		for (int32 k = 0; k < 4; ++k)
 		{
-			// 같은 메시 안에서도 더 가까운 삼각형이 뒤에 나올 수 있으므로 break 하지 않는다
-			NearestT = OutT;
-			bHit = true;
+			const int32 TriIdx = TriBase + ((k < Remaining) ? k : Remaining - 1);
+			const FVector& V0 = vertices[indices[TriIdx*3+0]].GetPosition();
+			const FVector& V1 = vertices[indices[TriIdx*3+1]].GetPosition();
+			const FVector& V2 = vertices[indices[TriIdx*3+2]].GetPosition();
+
+			V0x[k]=V0.x; V0y[k]=V0.y; V0z[k]=V0.z;
+			E1x[k]=V1.x-V0.x; E1y[k]=V1.y-V0.y; E1z[k]=V1.z-V0.z;
+			E2x[k]=V2.x-V0.x; E2y[k]=V2.y-V0.y; E2z[k]=V2.z-V0.z;
+		}
+
+		__m128 E1X=_mm_loadu_ps(E1x), E1Y=_mm_loadu_ps(E1y), E1Z=_mm_loadu_ps(E1z);
+		__m128 E2X=_mm_loadu_ps(E2x), E2Y=_mm_loadu_ps(E2y), E2Z=_mm_loadu_ps(E2z);
+
+		// P = cross(D, E2)
+		__m128 PX = _mm_sub_ps(_mm_mul_ps(DirY,E2Z), _mm_mul_ps(DirZ,E2Y));
+		__m128 PY = _mm_sub_ps(_mm_mul_ps(DirZ,E2X), _mm_mul_ps(DirX,E2Z));
+		__m128 PZ = _mm_sub_ps(_mm_mul_ps(DirX,E2Y), _mm_mul_ps(DirY,E2X));
+
+		__m128 Det = _mm_add_ps(_mm_add_ps(_mm_mul_ps(E1X,PX), _mm_mul_ps(E1Y, PY)), _mm_mul_ps(E1Z, PZ));
+		__m128 ValidDet = _mm_cmpge_ps(_mm_andnot_ps(_mm_set1_ps(-0.0f), Det), Epsilon);
+		__m128 InvDet = _mm_div_ps(One, Det);
+
+		__m128 V0X = _mm_loadu_ps(V0x), V0Y = _mm_loadu_ps(V0y), V0Z = _mm_loadu_ps(V0z);
+		__m128 TX = _mm_sub_ps(OriginX, V0X);
+		__m128 TY = _mm_sub_ps(OriginY, V0Y);
+		__m128 TZ = _mm_sub_ps(OriginZ, V0Z);
+
+		__m128 U = _mm_mul_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(TX,PX), _mm_mul_ps(TY,PY)), _mm_mul_ps(TZ,PZ)), InvDet);
+		__m128 UValid = _mm_and_ps(_mm_cmpge_ps(U, Zero), _mm_cmple_ps(U, One));
+
+		// Q = cross(T, E1)
+		__m128 QX = _mm_sub_ps(_mm_mul_ps(TY, E1Z), _mm_mul_ps(TZ, E1Y));
+		__m128 QY = _mm_sub_ps(_mm_mul_ps(TZ, E1X), _mm_mul_ps(TX, E1Z));
+		__m128 QZ = _mm_sub_ps(_mm_mul_ps(TX, E1Y), _mm_mul_ps(TY, E1X));
+
+		__m128 V = _mm_mul_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(DirX,QX), _mm_mul_ps(DirY,QY)), _mm_mul_ps(DirZ, QZ)), InvDet);
+		__m128 VValid = _mm_and_ps(_mm_cmpge_ps(V, Zero), _mm_cmple_ps(_mm_add_ps(U,V), One));
+
+		__m128 T = _mm_mul_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(E2X,QX), _mm_mul_ps(E2Y,QY)), _mm_mul_ps(E2Z,QZ)), InvDet);
+		__m128 TValid = _mm_cmpgt_ps(T, Epsilon);
+
+		__m128 Mask = _mm_and_ps(_mm_and_ps(ValidDet, UValid), _mm_and_ps(VValid, TValid));
+		int MaskBits = _mm_movemask_ps(Mask);
+
+		float TArr[4];
+		_mm_storeu_ps(TArr, T);
+
+		for (int32 k = 0; k < Remaining; ++k)
+		{
+			if ((MaskBits & (1 << k)) && TArr[k] < NearestT)
+			{
+				NearestT = TArr[k];
+				bHit = true;
+			}
 		}
 	}
-
 	if (bHit)
-	{
 		OutHitT = NearestT * PickingRay.Length;
-	}
 
 	return bHit;
 }
