@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "FLogManager.h"
 
 constexpr uint32 MaxLineInstances = 1024;
 
@@ -765,7 +766,14 @@ void URenderer::OnResize(UINT width, UINT height)
 	DepthStencilBuffer->Release();
 	DepthStencilView->Release();
 
-	SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+	// 스왑체인을 만들 때 쓴 플래그를 그대로 다시 넘겨야 한다. 안 그러면 E_INVALIDARG로 실패한다.
+	HRESULT hr = SwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN,
+		DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+	if (FAILED(hr))
+	{
+		UE_LOG_WARN("ResizeBuffers failed: 0x%08X", hr);
+		return;
+	}
 
 	Width = width;
 	Height = height;
