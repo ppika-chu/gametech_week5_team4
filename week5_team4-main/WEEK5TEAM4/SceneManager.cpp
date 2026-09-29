@@ -518,7 +518,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 #else
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
-	//updateObjectListPanelGUI(guiReference);
+	updateObjectListPanelGUI(guiReference);
 	ConsoleWindow::Get().Process(mBottomBarHeight);
 	mContentBrowser.SetAssetManager(guiReference.AssetManager);
 	mContentBrowser.Render(mBottomBarHeight);
@@ -1231,55 +1231,69 @@ void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
 			//for (UObject* object : mGuiInputField.SortedObjectLists)
 
 			UObject* bDeleteActorOrNull = nullptr;
-			for (unsigned int objectsIndex = 0; objectsIndex < mGuiInputField.SortedObjectLists.Num(); ++objectsIndex)
+
+			const int32 objectCount = mGuiInputField.SortedObjectLists.Num();
+			const float objectFrameHeight =
+				ImGui::GetTextLineHeightWithSpacing() * 3.0f
+				+ ImGui::GetStyle().WindowPadding.y * 2.0f;
+
+			ImGuiListClipper clipper;
+			clipper.Begin(objectCount);
+
+			while (clipper.Step())
 			{
-				UObject* object = mGuiInputField.SortedObjectLists[objectsIndex];
-
-				bool bSelected = false;
-				ImGui::PushID(object->UUID); // Ensure unique ID for each child
-
-				// Highlight the frame if this object is the clicked actor
-				if (object->UUID == selectedActorUUID)
+				for (int32 objectsIndex = clipper.DisplayStart;
+					objectsIndex < clipper.DisplayEnd;
+					++objectsIndex)
 				{
-					bSelected = true;
-					ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(255, 255, 0, 50)); // Light yellow background
-				}
+					UObject* object = mGuiInputField.SortedObjectLists[objectsIndex];
 
-				if (ImGui::BeginChild("ObjectFrame", ImVec2(0, 0), ImGuiChildFlags_FrameStyle | ImGuiChildFlags_AutoResizeY))
-				{
-					ImGui::Text("Class: %s", object->GetClass()->Name.CStr());
-					ImGui::Text("UUID: %d", object->UUID);
+					const bool bSelected = object->UUID == selectedActorUUID;
 
-					// TODO: Move implement delete to where?
-					if (object->IsA<AActor>())
+					ImGui::PushID(object->UUID);
+
+					if (bSelected)
 					{
-						AActor* actor = object->Cast<AActor>();
+						ImGui::PushStyleColor(
+							ImGuiCol_FrameBg,
+							IM_COL32(255, 255, 0, 50)
+						);
+					}
 
-						if (ImGui::Button("Select"))
+					if (ImGui::BeginChild(
+						"ObjectFrame",
+						ImVec2(0.0f, objectFrameHeight),
+						ImGuiChildFlags_FrameStyle))
+					{
+						ImGui::Text("Class: %s", object->GetClass()->Name.CStr());
+						ImGui::Text("UUID: %d", object->UUID);
+
+						if (object->IsA<AActor>())
 						{
-							SetSelectedActor(actor);
-						}
-						else
-						{
+							AActor* actor = object->Cast<AActor>();
+
+							if (ImGui::Button("Select"))
+							{
+								SetSelectedActor(actor);
+							}
+
 							ImGui::SameLine();
+
 							if (ImGui::Button("Delete"))
 							{
 								bDeleteActorOrNull = object;
 							}
 						}
-
-
 					}
+					ImGui::EndChild();
+
+					if (bSelected)
+					{
+						ImGui::PopStyleColor();
+					}
+
+					ImGui::PopID();
 				}
-				ImGui::EndChild();
-
-				if (bSelected)
-				{
-					ImGui::PopStyleColor(); // Pop the border color if it was pushed
-				}
-
-
-				ImGui::PopID();
 			}
 
 			if (bDeleteActorOrNull != nullptr)
