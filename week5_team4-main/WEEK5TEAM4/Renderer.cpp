@@ -578,9 +578,21 @@ void URenderer::RenderPrimitiveIndexed(const FRenderInfo& RenderInfo, uint32 Ste
 	RenderPrimitiveIndexed(PrimitivePipeline, RenderInfo, StencilRef);
 }
 
-void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef) const
+void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef, bool bBindFullPipeline) const
 {
-	BindPipeline(Pipeline, StencilRef);
+	if (bBindFullPipeline)
+	{
+		BindPipeline(Pipeline, StencilRef);
+	}
+	else
+	{
+		// SetShaderResource()는 Pipeline 내부 배열만 변경하므로
+		// 변경된 텍스처를 실제 D3D Context에 반영해야 한다.
+		if (Pipeline->ShaderResourceViews.Num() > 0)
+		{
+			DeviceContext->PSSetShaderResources(0, Pipeline->ShaderResourceViews.Num(),	&Pipeline->ShaderResourceViews[0]);
+		}
+	}
 
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 1, RenderInfo.VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);

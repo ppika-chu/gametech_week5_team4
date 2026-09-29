@@ -481,7 +481,7 @@ public:
 	void RenderPrimitive(Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices, const FMatrix& Model) const;
 	void RenderPrimitive(Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices, const FMatrix& Model, const FVector4& Color) const;
 	void RenderPrimitiveIndexed(const FRenderInfo& RenderInfo, uint32 StencilRef = 0) const;
-	void RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef = 0) const;
+	void RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef = 0, bool bBindFullPipeline = true) const;
 
 	void RenderQuad2D(const FRenderQuad2DInfo& Info) const;
 	void RenderLine2D(const FVector2& Start, const FVector2& End, const FVector4& Color, float Thickness = 1.0f) const;
