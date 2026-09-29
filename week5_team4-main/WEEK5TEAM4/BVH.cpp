@@ -164,7 +164,7 @@ void FBVH::QueryRay(const FPickingRay& Ray, TArray<FBVHRayHit>& OutHits) const
 			Stack.Add({ Node.RightChild, RightEntry });
 		}
 	}
-
+	// 결과를 AABB 진입 거리순으로 정렬한다.
 	std::sort(OutHits.begin(), OutHits.end(),
 		[](const FBVHRayHit& A, const FBVHRayHit& B)
 		{

@@ -200,9 +200,14 @@ void UWorld::FlushBVHUpdates()
 	}
 
 	// Set이 동일 컴포넌트의 위치/회전/스케일 변경을 하나로 합친다.
-	const bool bRefitAll = BVHBoundsUpdatePending.size() >= 128;
+
+	const float EstimatedDepth = FMath::Max(1.0f,std::ceil(std::log2(static_cast<float>(BVH.GetLeafCount()))));
+	
+	// 개별 갱신 비용이 전체 갱신 비용보다 크면 전체 갱신으로 바꾼다. (BVH의 깊이 * 갱신할 리프 수 >= 전체 리프 수)
+	const bool bRefitAll = EstimatedDepth * BVHBoundsUpdatePending.size() >= BVH.GetLeafCount();
 	for (UPrimitiveComponent* Component : BVHBoundsUpdatePending)
 	{
+
 		if (!Component)
 		{
 			continue;

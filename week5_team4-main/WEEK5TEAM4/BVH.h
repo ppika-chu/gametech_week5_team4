@@ -37,6 +37,11 @@ public:
 
 	void QueryRay(const FPickingRay& Ray, TArray<FBVHRayHit>& OutHits) const;
 
+	size_t GetLeafCount() const
+	{
+		return LeafIndices.size();
+	}
+
 private:
 	struct FBuildItem
 	{

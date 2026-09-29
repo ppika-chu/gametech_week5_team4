@@ -21,7 +21,27 @@ struct FTransform
 
 	FMatrix MakeMatrix() const
 	{
-		return  FMatrix::Scale(Scale) * FMatrix::Rotate(Rotation) * FMatrix::Translation(Location);
+		FMatrix Result = FMatrix::Rotate(Rotation);
+
+		// 행 벡터 방식: Scale * Rotation
+		Result.M[0][0] *= Scale.x;
+		Result.M[0][1] *= Scale.x;
+		Result.M[0][2] *= Scale.x;
+
+		Result.M[1][0] *= Scale.y;
+		Result.M[1][1] *= Scale.y;
+		Result.M[1][2] *= Scale.y;
+
+		Result.M[2][0] *= Scale.z;
+		Result.M[2][1] *= Scale.z;
+		Result.M[2][2] *= Scale.z;
+
+		// * Translation
+		Result.M[3][0] = Location.x;
+		Result.M[3][1] = Location.y;
+		Result.M[3][2] = Location.z;
+
+		return Result;
 	}
 
 	FMatrix InverseMatrix() const
