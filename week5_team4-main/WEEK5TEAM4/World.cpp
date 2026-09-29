@@ -130,8 +130,8 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 	{
 		mBVH.QueryFrustum(*outCollector.Frustum, [&outCollector](UPrimitiveComponent* Component)
 		{	
-			Component->Render(outCollector);
-			Component->RegisterPickTarget(outCollector);
+			const FAABB WorldBounds = Component->GetBoundingBox();
+			Component->Render(outCollector, WorldBounds);
 		});
 	}
 	else{

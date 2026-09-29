@@ -224,39 +224,26 @@ inline bool RayIntersectsTriangle(const FVector& Origin, const FVector& Dir, con
 
 inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB)
 {
-	if (Distance < 0.f)
-	{
-		return false;
-	}
+	if (Distance < 0.f)	return false;
 
-	float Enter = 0.f;
-	float Exit = Distance;
+	__m128 Origin = _mm_set_ps(1.f, Ray.Origin.z, Ray.Origin.y, Ray.Origin.x);
+	__m128 InvDir = _mm_set_ps(1.f, 1.f/Ray.Direction.z, 1.f/Ray.Direction.y, 1.f/Ray.Direction.x);
+	__m128 Min = _mm_set_ps(0.f, AABB.Min.z, AABB.Min.y, AABB.Min.x);
+	__m128 Max = _mm_set_ps(0.f, AABB.Max.z, AABB.Max.y, AABB.Max.x);
 
-	for (int32 i = 0; i < 3; i++)
-	{
-		if (Ray.Direction[i] == 0.f)
-		{
-			if (Ray.Origin[i] < AABB.Min[i] || Ray.Origin[i] > AABB.Max[i])
-			{
-				return false;
-			}
+	__m128 T0 = _mm_mul_ps(_mm_sub_ps(Min, Origin), InvDir);
+	__m128 T1 = _mm_mul_ps(_mm_sub_ps(Max, Origin), InvDir);
+	__m128 TMin = _mm_min_ps(T0, T1);
+	__m128 TMax = _mm_max_ps(T0, T1);
 
-			continue;
-		}
+	float MinArr[4], MaxArr[4];
+	_mm_storeu_ps(MinArr, TMin);
+	_mm_storeu_ps(MaxArr, TMax);
 
-		float AxisEnter = (AABB.Min[i] - Ray.Origin[i]) / Ray.Direction[i];
-		float AxisExit = (AABB.Max[i] - Ray.Origin[i]) / Ray.Direction[i];
-		if (AxisEnter > AxisExit)
-		{
-			std::swap(AxisEnter, AxisExit);
-		}
-
-		if (AxisEnter > Enter) Enter = AxisEnter;
-		if (AxisExit < Exit) Exit = AxisExit;
-		if (Enter > Exit) return false;
-	}
-
-	return true;
+	float Enter = (std::max)({0.f, MinArr[0], MinArr[1], MinArr[2]});
+	float Exit = (std::min)({Distance, MaxArr[0], MaxArr[1], MaxArr[2]});
+	
+	return Enter <= Exit;
 }
 
 struct FFrustum
@@ -284,7 +271,7 @@ struct FFrustum
 		F.Planes[2] = Col1 + Col3;
 		F.Planes[3] = Col3 - Col1;
 		F.Planes[4] = Col2;			// -w 가 0 이므로 
-		F.Planes[0] = Col3 - Col2;
+		F.Planes[5] = Col3 - Col2;
 
 		return F;
 	}
@@ -292,20 +279,26 @@ struct FFrustum
 	inline bool Intersects(const FAABB& AABB) const
 	{
 		// 각 축의 중심
-		const FVector Center = (AABB.Min + AABB.Max) * 0.5f;
+		__m128 Center = _mm_set_ps(1.f, (AABB.Min.z+AABB.Max.z)*0.5f, (AABB.Min.y+AABB.Max.y)*0.5f, (AABB.Min.x+AABB.Max.x)*0.5f);
+
 		// 각 축의 뻗어나가는 방향
-		const FVector Extent = (AABB.Max - AABB.Min) * 0.5f;
+		__m128 Extent = _mm_set_ps(0.f, (AABB.Max.z-AABB.Min.z)*0.5f, (AABB.Max.y-AABB.Min.y)*0.5f, (AABB.Max.x-AABB.Min.x)*0.5f);
 
 		for (const FVector4& P : Planes)
 		{
-			const float Radius = fabsf(P.x) * Extent.x + fabsf(P.y) * Extent.y + fabsf(P.z) * Extent.z;
-			const float Dist = P.x * Center.x + P.y * Center.y + P.z * Center.z + P.w;
+			__m128 Plane = _mm_set_ps(P.w, P.z, P.y, P.x);
+			__m128 AbsPlane = _mm_andnot_ps(_mm_set1_ps(-0.0f), Plane);	// fabs
+			__m128 DistV = _mm_mul_ps(Plane, Center);
+			__m128 RadV = _mm_mul_ps(AbsPlane, Extent);
 
-			// 이 평면의 가장 유리한 꼭짓점조차 Frustum 바깥에 있으므로 false
-			if (Dist + Radius < 0.f)
-			{
-				return false;
-			}
+			float DistArr[4], RadArr[4];
+			_mm_storeu_ps(DistArr, DistV);
+			_mm_storeu_ps(RadArr, RadV);
+			float Dist = DistArr[0] + DistArr[1] + DistArr[2] + DistArr[3];
+			float Radius = RadArr[0] + RadArr[1] + RadArr[2];
+
+		// 이 평면의 가장 유리한 꼭짓점조차 Frustum 바깥에 있으므로 false
+			if (Dist + Radius < 0.f) return false;
 		}
 		return true;
 	}

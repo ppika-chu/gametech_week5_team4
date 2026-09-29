@@ -89,7 +89,7 @@ void UStaticMeshComponent::DeserializeClass(const json::JSON& inJson)
 	}
 }
 
-void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
+void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds)
 {
     if (!mMeshAsset)
     {
@@ -101,8 +101,9 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+
     // Frustum Culling
-    if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(GetBoundingBox()))
+    if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
     {
         ++RenderCollector.CulledObjectCount;
         return;
@@ -112,19 +113,18 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
     Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBufferToUse = mMeshAsset->GetVertexBuffer();
     Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
 
-    // 너무 작은 픽셀은 render pass
+    // 너무 작은 픽셀은 LOD
     if (RenderCollector.Camera)
     {
-        const FAABB WorldBounds = GetBoundingBox();
-        const float Radius = ((WorldBounds.Max - WorldBounds.Min) * 0.5f).Length();
+        const float RadiusSq = ((WorldBounds.Max - WorldBounds.Min) * 0.5f).LengthSquared();
         const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
-        const float Distance = (Center - RenderCollector.Camera->Transform.Location).Length();
+        const float DistanceSq = (Center - RenderCollector.Camera->Transform.Location).LengthSquared();
 
         constexpr float LODDistanceRatios[] = { 30.0f, 60.0f }; // LOD1, LOD2
     
         for (int32 i = 0; i < mMeshAsset->GetLODCount() && i < 2; ++i)
         {
-            if (Distance > Radius * LODDistanceRatios[i])
+            if (DistanceSq > RadiusSq * LODDistanceRatios[i] * LODDistanceRatios[i])
             {
                 const FMeshLOD& LOD = mMeshAsset->GetLOD(i);
                 SectionsToUse = &LOD.Sections;
@@ -169,7 +169,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
-        RenderInfo.Model = GetTransformMatrix().MakeMatrix();
+        RenderInfo.Model = GetCacheWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
@@ -185,7 +185,7 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
         return FAABB();
     }
 
-    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
+    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix());
 }
 
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)

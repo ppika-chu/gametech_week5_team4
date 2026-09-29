@@ -173,7 +173,7 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 		RenderInfo.IndexBuffer = mHighlightIndexBuffer->Buffer;
 		RenderInfo.StartIndex = 0;
 		RenderInfo.IndexCount = static_cast<uint32>(Indices.Num());
-		RenderInfo.Model = Primitive->GetTransformMatrix().MakeMatrix();
+		RenderInfo.Model = Primitive->GetCacheWorldMatrix();
 
 		mRenderer->RenderPrimitiveIndexed(mHighlightMarkPipeline, RenderInfo, 1);
 	}
@@ -203,6 +203,11 @@ void FGraphicsManager::Render()
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 
+	for (FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
+	{
+		RenderInfo.ViewSpaceZ = mViewMatrix.TransformPosition(RenderInfo.Model.GetOrigin()).z;
+	}
+
 	// state sorting : 같은 텍스처 / 메시끼리 묶어서 캐시 hit 높이기
 	std::sort(mRenderCollector.RenderInfos.begin(), mRenderCollector.RenderInfos.end(),
 			[&](const FRenderInfo& A, const FRenderInfo& B)
@@ -210,15 +215,8 @@ void FGraphicsManager::Render()
 			// 거리 구간을 나눔.
 			constexpr float BucketSize = 100.0f;
 
-			// Early-Z
-			const FVector ViewPosA = mViewMatrix.TransformPosition(A.Model.GetOrigin());
-			const FVector ViewPosB = mViewMatrix.TransformPosition(B.Model.GetOrigin());
-
-			const float DistA = ViewPosA.z;   // 뷰 공간 깊이(z)만 사용
-			const float DistB = ViewPosB.z;
-
-			const int32 BucketA = static_cast<int32>(DistA / BucketSize);
-			const int32 BucketB = static_cast<int32>(DistB / BucketSize);
+			const int32 BucketA = static_cast<int32>(A.ViewSpaceZ / BucketSize);
+			const int32 BucketB = static_cast<int32>(B.ViewSpaceZ / BucketSize);
 
 			// 1차 sort: 대략 거리 구간 나누기
 			if (BucketA != BucketB)

@@ -18,7 +18,7 @@ public:
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
 
-	virtual void Render(FRenderCollector& RenderCollector) override;
+	virtual void Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds) override;
 
 	FAABB GetBoundingBox() const override;
 

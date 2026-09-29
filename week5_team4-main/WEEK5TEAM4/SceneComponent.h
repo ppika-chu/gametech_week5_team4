@@ -6,6 +6,7 @@
 #include "Vector.h"
 
 class FTransform;
+struct FMatrix;
 
 class USceneComponent : public UActorComponent
 {
@@ -29,10 +30,14 @@ public:
 	void SetRelativeScale3D(FVector scale);
 
 	FTransform GetTransformMatrix() const;
+	const FMatrix& GetCacheWorldMatrix() const;
 
 private:
 	FVector mRelativeLocation;
 	FRotator mRelativeRotation;
 	FVector mRelativeScale3D;
+
+	mutable FMatrix mCacheWorldMatrix;
+	mutable bool mbMatrixDirty = true;
 };
 
