@@ -100,6 +100,20 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
+    const FMatrix ModelMatrix =  GetTransformMatrix().MakeMatrix();
+    const FAABB WorldBounds = mMeshAsset->GetLocalBoundingBox().ToWorld(ModelMatrix);
+
+    if (RenderCollector.bEnableFrustumCulling)
+    {
+        const EFrustumResult Result = RenderCollector.Frustum.TestAABB(WorldBounds);
+
+        if (Result == EFrustumResult::Outside)
+        {
+            ++RenderCollector.CulledObjectCount;
+            return;
+        }
+    }
+
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
@@ -135,7 +149,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
-        RenderInfo.Model = GetTransformMatrix().MakeMatrix();
+        RenderInfo.Model = ModelMatrix;
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
