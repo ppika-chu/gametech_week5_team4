@@ -18,6 +18,8 @@
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
+#include "World.h"
+#include "UStaticMeshComponent.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -71,7 +73,7 @@ void FEditorViewportClient::SetViewportType(EViewportType InViewportType)
 	}
 }
 
-AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, const FRenderCollector& RenderCollector)
+AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, float perspectiveRatio, UWorld& World, const FRenderCollector& RenderCollector)
 {
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
@@ -104,21 +106,56 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
+	FBVHRayHit BVHHit;
+	FBVHRayQueryStats BVHStats;
+
+	const bool bHitStaticMesh = World.RayCastStaticBVH(PickingRay,	BVHHit,	&BVHStats);
+	PickTestCount += BVHStats.NarrowPhaseTests;
+
+	float NearestT = FLT_MAX;
+
+	if (bHitStaticMesh && BVHHit.Component)
+	{
+		NearestT = BVHHit.HitT;
+		NearestActor = BVHHit.Component->GetOwner();
+	}
+
 	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
 	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 	{
-		// 충돌 검사할 때마다 +1
-		++PickTestCount;
-		float HitT = FLT_MAX;
-		if (!PickTarget->RayCastComponent(PickingRay, HitT))
+		if (!PickTarget)
 		{
 			continue;
 		}
 
-		if (HitT < NearlistT)
+		// StaticMeshComponent는 BVH에서 이미 검사했다.
+		if (PickTarget->IsA<UStaticMeshComponent>())
 		{
-			NearlistT = HitT;
-			NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
+			continue;
+		}
+
+		++PickTestCount;
+
+		float HitT = FLT_MAX;
+
+		if (!PickTarget->RayCastComponent(
+			PickingRay,
+			HitT))
+		{
+			continue;
+		}
+
+		// Near~Far 선분 범위 밖의 결과는 제외한다.
+		if (HitT < 0.0f || HitT > 1.0f)
+		{
+			continue;
+		}
+
+		if (HitT < NearestT)
+		{
+			NearestT = HitT;
+			NearestActor =
+				PickTarget->GetOwner();
 		}
 	}
 

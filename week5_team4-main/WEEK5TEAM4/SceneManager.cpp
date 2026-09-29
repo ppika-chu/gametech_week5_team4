@@ -1413,7 +1413,7 @@ void FSceneManager::LoadScene(FCamera* Camera, const std::filesystem::path& scen
 		{
 			throw std::runtime_error(std::format("Failed to deserialize world from '{}'.", scenePath.string()));
 		}
-
+		newWorld->RebuildStaticBVH();
 		// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
 		FObjectFactory::DestroyObject(mCurrentWorld);
 		mCurrentWorld = newWorld;
@@ -1433,7 +1433,9 @@ void FSceneManager::LoadScene(FCamera* Camera, const std::filesystem::path& scen
 		{
 			throw std::runtime_error(std::format("Failed to deserialize world from '{}'.", scenePath.string()));
 		}
-		
+
+		newWorld->RebuildStaticBVH();
+
 		// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
 		FObjectFactory::DestroyObject(mCurrentWorld);
 		mCurrentWorld = newWorld;

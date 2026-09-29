@@ -2,6 +2,7 @@
 
 #include "Object.h"
 #include "Actor.h"
+#include "BVH.h"
 
 #include "RenderInfo.h"
 //struct FRenderInfo;
@@ -26,6 +27,13 @@ public:
 	void Render(float deltaTime, FRenderCollector& outCollector);
 	//void Render();
 
+	const FBVH& GetStaticBVH() const { return StaticBVH; }
+
+	bool RayCastStaticBVH(const FPickingRay& Ray, FBVHRayHit& OutHit, FBVHRayQueryStats* OutStats = nullptr);
+
+	void RebuildStaticBVH();
+	void MarkStaticBVHDirty();
+	void UpdateActorInStaticBVH(AActor* Actor);
 
 private:
 	int32 getActorIndex(uint32 actorUUID) const;
@@ -39,6 +47,7 @@ private:
 	// Todo: Must reserve
 	TArray<AActor*> mActors;
 
-
-
+	FBVH StaticBVH;
+	bool bStaticBVHDirty = true;
+	TArray<UPrimitiveComponent*> StaticPrimitives;
 };

@@ -6,9 +6,13 @@
 #include "JsonUtil.h"
 #include "Console.h"
 #include "ObjectFactory.h"
+#include <UStaticMeshComponent.h>
 
 UWorld::~UWorld()
 {
+	StaticBVH.Clear();
+	StaticPrimitives.Empty();
+
 	for (AActor* removeActor : mActors)
 	{
 		FObjectFactory::DestroyObject(removeActor);
@@ -70,6 +74,7 @@ void UWorld::AddActor(AActor* actor)
 
 	// TODO: 전처리를 통해 에디터 모드가 아니면 아래 코드를 컴파일하지 않게 막아야함.
 	actor->CreateEditorComponents();
+	MarkStaticBVHDirty();
 }
 
 bool UWorld::RemoveActor(uint32 componentUUID)
@@ -82,7 +87,7 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 
 	//mActors.RemoveAt(componentIndex, 1);
 	mActors.RemoveAtSwap(componentIndex);
-
+	MarkStaticBVHDirty();
 	return true;
 }
 
@@ -118,4 +123,87 @@ int32 UWorld::getActorIndex(uint32 actorUUID) const
 	}
 
 	return -1;
+}
+
+bool UWorld::RayCastStaticBVH(const FPickingRay& Ray, FBVHRayHit& OutHit, FBVHRayQueryStats* OutStats)
+{
+	if (bStaticBVHDirty)
+	{
+		RebuildStaticBVH();
+	}
+
+	return StaticBVH.RayCastClosest(Ray, OutHit, OutStats);
+}
+
+void UWorld::RebuildStaticBVH()
+{
+	StaticPrimitives.Reset(mActors.Num());
+
+	for (AActor* Actor : mActors)
+	{
+		if (!Actor)
+		{
+			continue;
+		}
+
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			UStaticMeshComponent* StaticMeshComponent =	Component->Cast<UStaticMeshComponent>();
+
+			if (!StaticMeshComponent)
+			{
+				continue;
+			}
+
+			// Mesh가 없으면 기본 (0,0,0) AABB가 BVH에
+			// 들어갈 수 있으므로 제외한다.
+			if (!StaticMeshComponent->GetMesh())
+			{
+				continue;
+			}
+
+			StaticPrimitives.Add(StaticMeshComponent);
+		}
+	}
+
+	StaticBVH.Build(StaticPrimitives);
+	bStaticBVHDirty = false;
+}
+
+void UWorld::MarkStaticBVHDirty()
+{
+	bStaticBVHDirty = true;
+}
+
+void UWorld::UpdateActorInStaticBVH(AActor* Actor)
+{
+	if (!Actor)
+	{
+		return;
+	}
+
+	// 아직 Build되지 않았다면 개별 갱신할 수 없다.
+	if (bStaticBVHDirty)
+	{
+		return;
+	}
+
+	for (UActorComponent* Component : Actor->GetComponents())
+	{
+		UStaticMeshComponent* StaticMeshComponent =	Component->Cast<UStaticMeshComponent>();
+
+		if (!StaticMeshComponent ||	!StaticMeshComponent->GetMesh())
+		{
+			continue;
+		}
+
+		const bool bUpdated = StaticBVH.UpdateLeafAndRefit(	StaticMeshComponent, StaticMeshComponent->GetBoundingBox());
+
+		// 기존 BVH에 없던 컴포넌트라면 전체 재구축 대상이다.
+		if (!bUpdated)
+		{
+			MarkStaticBVHDirty();
+			return;
+		}
+	}
 }

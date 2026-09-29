@@ -266,14 +266,24 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && bIsAssetDragging)
 		{
-			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector);
-			if (HitActor)
+			UWorld* CurrentWorld = mSceneManager->GetCurrentWorld();
+			//AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, *CurrentWorld, RenderCollector);
+			if (CurrentWorld)
 			{
-				mSceneManager->SetSelectedActor(HitActor);
-			}
-			else
-			{
-				mSceneManager->ResetSelectedActor();
+				// Property Window 또는 이전 기즈모 조작으로 변경된
+				// 현재 선택 Actor의 Bounds를 Picking 전에 갱신한다.
+				CurrentWorld->UpdateActorInStaticBVH(mSceneManager->GetSelectedActor());
+
+				AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, *CurrentWorld,	RenderCollector);
+
+				if (HitActor)
+				{
+					mSceneManager->SetSelectedActor(HitActor);
+				}
+				else
+				{
+					mSceneManager->ResetSelectedActor();
+				}
 			}
 		}
 
@@ -318,6 +328,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			}
 
 			CurrentViewport->Client->mGizmo.Tick(SelectedActor, CurrentViewport->Window->Rect, CurrentViewport->Client->IsActive(), InvViewProjection);
+			//mSceneManager->GetCurrentWorld()->UpdateActorInStaticBVH(SelectedActor);
 		}
 
 		//Render Threads
