@@ -7,6 +7,8 @@
 #include "Console.h"
 #include "ObjectFactory.h"
 
+#include "OptimizationFlags.h"
+
 UWorld::~UWorld()
 {
 	for (AActor* removeActor : mActors)
@@ -126,12 +128,23 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 	// 채워지므로 여기서 Reset 하면 남의 것까지 날린다. 메시/픽킹 배열만 여기서 갈아끼운다.
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);
 	outCollector.PickTargets.Reset(DEFAULT_RESERVE_MEM);
-	if (outCollector.Frustum)
+
+	const bool bUseBVH = outCollector.Frustum
+		&& IsOptEnabled(EOptFlag::FrustumCulling)
+		&& IsOptEnabled(EOptFlag::BVHCulling);
+
+	if (bUseBVH)
 	{
 		mBVH.QueryFrustum(*outCollector.Frustum, [&outCollector](UPrimitiveComponent* Component)
 		{	
 			const FAABB WorldBounds = Component->GetBoundingBox();
 			Component->Render(outCollector, WorldBounds);
+
+			// 브루트포스 피킹을 쓸 때만 후보 목록이 필요하다.
+			if (!IsOptEnabled(EOptFlag::BVHPicking))
+			{
+				Component->RegisterPickTarget(outCollector, WorldBounds);
+			}
 		});
 	}
 	else{

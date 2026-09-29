@@ -3,6 +3,7 @@
 #include "FAssetManager.h"
 #include "RenderInfo.h"
 #include "ShowFlags.h"
+#include "OptimizationFlags.h"
 #include "Actor.h"
 #include "JsonUtil.h"
 #include "EngineMathLibrary.h"
@@ -103,7 +104,9 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
 
 
     // Frustum Culling
-    if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+    // BVH 모드에서도 남겨둔다. BVH는 리프(4개 묶음) 단위라 경계에 걸친 것은 여기서 정밀하게 걸러진다.
+    if (GCullingMode != ECullingMode::Off
+        && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
     {
         ++RenderCollector.CulledObjectCount;
         return;
@@ -114,7 +117,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
     Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
 
     // 너무 작은 픽셀은 LOD
-    if (RenderCollector.Camera)
+    if (RenderCollector.Camera && IsOptEnabled(EOptFlag::LOD))
     {
         const float RadiusSq = ((WorldBounds.Max - WorldBounds.Min) * 0.5f).LengthSquared();
         const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;

@@ -4,6 +4,7 @@
 #include "SceneComponent.h"
 #include "UTextComponent.h"
 #include "ObjectFactory.h"
+#include "OptimizationFlags.h"
 #include <format>
 
 AActor::~AActor()
@@ -170,9 +171,12 @@ void AActor::Render(FRenderCollector& RenderCollector)
 		const FAABB WorldBounds = component->GetBoundingBox();
 		component->Render(RenderCollector, WorldBounds);
 
-		// 렌더 정보를 모으는 김에 픽킹 대상도 같이 모은다.
-		// 액터 계층을 두 번 훑지 않기 위함이다.
-		// component->RegisterPickTarget(RenderCollector, WorldBounds);
+		// 브루트포스 피킹을 쓸 때만 후보 목록이 필요하다.
+		// BVH 피킹을 쓰면 PickTargets를 아무도 읽지 않으므로 채우지 않는다.
+		if (GPickingMode == EPickingMode::BruteForce)
+		{
+			component->RegisterPickTarget(RenderCollector, WorldBounds);
+		}
 	}
 }
 

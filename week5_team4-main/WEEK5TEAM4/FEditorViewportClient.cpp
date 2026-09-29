@@ -12,6 +12,7 @@
 #include "SceneManager.h"
 #include "MathUtility.h"
 #include "GraphicsManager.h"
+#include "OptimizationFlags.h"
 #include "Renderer.h"
 #include <cstdio>
 #include "UTextComponent.h"
@@ -105,28 +106,36 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
-	UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount, RenderCollector.Frustum);
-	NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
-
-	#if 0
-	// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
-	for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
+	if (GPickingMode != EPickingMode::BruteForce)
 	{
-		// 충돌 검사할 때마다 +1
-		++PickTestCount;
-		float HitT = FLT_MAX;
-		if (!PickTarget->RayCastComponent(PickingRay, HitT))
-		{
-			continue;
-		}
+		// Frustum을 넘기면 화면 밖 오브젝트는 후보에서 빠진다.
+		const FFrustum* PickFrustum = (GPickingMode == EPickingMode::BVHFrustum)
+			? RenderCollector.Frustum : nullptr;
 
-		if (HitT < NearlistT)
+		UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount, PickFrustum);
+		NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
+	}
+	else
+	{
+		// 브루트포스: RegisterPickTarget이 모아둔 후보 전체를 검사한다.
+		// 충돌 판정은 컴포넌트가 스스로 한다. 여기서는 어느 것이 가장 가까운지만 고른다.
+		for (UPrimitiveComponent* PickTarget : RenderCollector.PickTargets)
 		{
-			NearlistT = HitT;
-			NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
+			// 충돌 검사할 때마다 +1
+			++PickTestCount;
+			float HitT = FLT_MAX;
+			if (!PickTarget->RayCastComponent(PickingRay, HitT))
+			{
+				continue;
+			}
+
+			if (HitT < NearlistT)
+			{
+				NearlistT = HitT;
+				NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
+			}
 		}
 	}
-	#endif
 
 	const auto EndTime = std::chrono::high_resolution_clock::now();
 

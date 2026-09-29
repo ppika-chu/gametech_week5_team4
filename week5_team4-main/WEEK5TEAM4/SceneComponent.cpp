@@ -4,6 +4,7 @@
 
 #include "Transform.h"
 #include "JsonUtil.h"
+#include "OptimizationFlags.h"
 
 void USceneComponent::Initialize(FVector location, FRotator rotation, FVector scale3D)
 {
@@ -98,7 +99,8 @@ FTransform USceneComponent::GetTransformMatrix() const
 
 const FMatrix& USceneComponent::GetCacheWorldMatrix() const
 {	
-	if (mbMatrixDirty)
+	// 캐싱을 끄면 매번 다시 계산한다 (비교 측정용).
+	if (mbMatrixDirty || !IsOptEnabled(EOptFlag::TransformCache))
 	{
 		mCacheWorldMatrix = GetTransformMatrix().MakeMatrix();
 		mbMatrixDirty = false;

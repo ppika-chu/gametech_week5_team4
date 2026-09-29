@@ -37,6 +37,8 @@
 #include "FTextBuilder.h"
 #include "FSceneConverter.h"
 
+#include "OptimizationFlags.h"
+
 FSceneManager::FSceneManager()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -739,7 +741,33 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 				e.what());
 		}
 	}
+	
+	ImGui::SeparatorText("Optimization");
+	{
+		// 항목 추가 시, OptimizationFlags.h의 GOptFlagInfos에 적으면 됨.
+		for (const FOptFlagInfo& Info : GOptFlagInfos)
+		{
+			bool bEnabled = IsOptEnabled(Info.Flag);
+			if (ImGui::Checkbox(Info.Name, &bEnabled))
+			{
+				GOptEnabled[static_cast<uint8>(Info.Flag)] = bEnabled;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("%s", Info.Tooltip);
+			}
+		}
 
+		if (ImGui::Button("All on"))
+		{
+			for (bool& b : GOptEnabled) { b = true; }
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("All Off"))
+		{
+			for (bool& b : GOptEnabled) { b = false; }
+		}
+	}
 
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
