@@ -27,6 +27,7 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mMeshPipeline->SetShader("Assets/Shaders/StaticMeshShader.hlsl");
 	mMeshPipeline->AddConstantBuffer<FConstants>();
 	mMeshPipeline->AddConstantBuffer<FMatrix>();
+	mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
 
 	mHighlightMarkPipeline = mRenderer->CreateRenderPipeline();
 	mHighlightMarkPipeline->SetRasterRizerState(D3D11_CULL_BACK);
@@ -206,7 +207,6 @@ void FGraphicsManager::Render()
 		if (RenderInfo.Texture)
 		{
 			mMeshPipeline->ClearShaderResource();
-			mMeshPipeline->ClearSamplerState();
 
 			FConstants Constants{};
 			Constants.Matrix = RenderInfo.Model;
@@ -219,7 +219,6 @@ void FGraphicsManager::Render()
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 
 			mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
 
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
 		}

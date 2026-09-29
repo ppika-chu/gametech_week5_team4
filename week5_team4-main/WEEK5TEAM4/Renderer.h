@@ -493,6 +493,9 @@ public:
 
 	void ClearAllShaderResources() const;
 
+	void BindPSSamplers(uint32 StartSlot, uint32 Count, ID3D11SamplerState* const* Samplers) const;
+	void InvalidateStateCache() const;
+
 	void SwapBuffer();
 
 	//해상도 변경 시 호출
@@ -509,6 +512,8 @@ public:
 
 	// GPU Draw 호출 횟수
 	mutable uint64 DrawCallCount = 0;
+	
+	
 
 	uint64 GetDrawCallCount() const { return DrawCallCount; }
 	void ResetDrawCallCount() { DrawCallCount = 0; }
@@ -557,6 +562,11 @@ private:
     FLOAT ClearColor[4] = { 0.025f, 0.025f, 0.025f, 1.0f };
     D3D11_VIEWPORT ViewportInfo;
 	FMatrix Projection2D;
+
+	// 바인딩 캐시: PS 샘플러 슬롯별로 마지막에 묶은 샘플러
+	static constexpr uint32 MaxPSSampleSlots = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
+	mutable ID3D11SamplerState* BoundPSSamplers[MaxPSSampleSlots] = {};
+	mutable uint32 KnownPSSamplerMask = 0;
 
 	// 와이어프레임 여부. Prepare에서 갱신하고 BindPipeline이 읽는다.
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.

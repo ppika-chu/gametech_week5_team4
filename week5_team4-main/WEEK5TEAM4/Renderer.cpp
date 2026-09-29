@@ -229,6 +229,7 @@ void URenderer::SwapBuffer()
 
 void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
 {
+	InvalidateStateCache();
 	DeviceContext->ClearRenderTargetView(FrameBufferRTV, ClearColor);
 	DeviceContext->ClearDepthStencilView(DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -412,14 +413,12 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32
 		DeviceContext->PSSetShaderResources(0, 1, &nullSRV);
 	}
 
+
+	// 샘플러를 쓰는 파이프라인만 s0을 묶는다.
+	// 샘플러가 없는 파이프라인(라인, 그리드 등)은 셰이더가 샘플링하지 않으므로 s0을 건드리지 않는다.
 	if (Pipeline->SamplerStates.Num())
 	{
-		DeviceContext->PSSetSamplers(0, Pipeline->SamplerStates.Num(), &Pipeline->SamplerStates[0]);
-	}
-	else
-	{
-		ID3D11SamplerState* nullSampler = nullptr;
-		DeviceContext->PSSetSamplers(0, 1, &nullSampler);
+		BindPSSamplers(0, static_cast<uint32>(Pipeline->SamplerStates.Num()), &Pipeline->SamplerStates[0]);
 	}
 }
 
@@ -701,6 +700,53 @@ void URenderer::ClearAllShaderResources() const
 	ID3D11ShaderResourceView* nullSRVs[D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT] = {};
 	DeviceContext->VSSetShaderResources(0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, nullSRVs);
 	DeviceContext->PSSetShaderResources(0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, nullSRVs);
+}
+
+
+void URenderer::BindPSSamplers(uint32 StartSlot, uint32 Count, ID3D11SamplerState* const* Samplers) const
+{
+	if (Count == 0 || StartSlot >= MaxPSSampleSlots)
+	{
+		return;
+	}
+
+	Count = FMath::Min(Count, MaxPSSampleSlots - StartSlot);
+
+	int32 FirstChanged = -1;
+	int32 LastChanged = -1;
+	for (uint32 i = 0; i < Count; ++i)
+	{
+		const uint32 Slot = StartSlot + i;
+		const bool bKnown = (KnownPSSamplerMask & (1u << Slot)) != 0;
+		if (!bKnown || BoundPSSamplers[Slot] != Samplers[i])                 // 모르거나, 기록과 다르면 = "바뀜"
+		{
+			if (FirstChanged < 0)
+			{
+				FirstChanged = static_cast<int32>(i);
+			}
+			LastChanged = static_cast<int32>(i);
+		}
+	}
+
+	if (FirstChanged < 0)
+	{
+		return;
+	}
+
+	const uint32 BindStart = StartSlot + FirstChanged;
+	const uint32 BindCount = static_cast<uint32>(LastChanged - FirstChanged + 1);
+	DeviceContext->PSSetSamplers(BindStart, BindCount, &Samplers[FirstChanged]);
+
+	for (uint32 i = 0; i < BindCount; ++i)
+	{
+		BoundPSSamplers[BindStart + i] = Samplers[FirstChanged + i];
+		KnownPSSamplerMask |= (1u << (BindStart + i));
+	}
+}
+
+void URenderer::InvalidateStateCache() const
+{
+	KnownPSSamplerMask = 0;
 }
 
 //=============================================
