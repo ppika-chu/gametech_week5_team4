@@ -250,7 +250,7 @@ void FGraphicsManager::Render()
 			}
 
 			FConstants Constants{};
-			Constants.Matrix = RenderInfo.Model;
+			Constants.Matrix = RenderInfo.Model * mViewUnifiedProjectionMatrix;
 			Constants.Color = RenderInfo.Color;
 			Constants.UseVertexColor = RenderInfo.UseVertexColor;
 			Constants.HasTexture = RenderInfo.Texture ? 1 : 0;
