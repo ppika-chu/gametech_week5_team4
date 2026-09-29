@@ -177,7 +177,12 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
         return FAABB();
     }
 
-    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix());
+    // 캐싱을 끄면 매번 다시 계산한다 (비교 측정용).
+    if (IsWorldAABBDirty() || !IsOptEnabled(EOptFlag::TransformCache))
+    {
+        SetCacheWorldAABB(mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix()));
+    }
+    return GetCacheWorldAABB();
 }
 
 void UStaticMeshComponent::RebuildSectionTextures()
@@ -216,6 +221,7 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 		mMeshAsset = nullptr;
 		mMaterialAssets.Empty();
 		mUVOffsets.Empty();
+        MarkWorldAABBDirty();
         RebuildSectionTextures();
 		return;
     }
@@ -229,5 +235,6 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
         mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(Section.MaterialAssetID, true);
     }
     mMeshAsset = InMesh;
+    MarkWorldAABBDirty();
     RebuildSectionTextures();
 }

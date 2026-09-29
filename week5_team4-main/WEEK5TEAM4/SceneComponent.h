@@ -32,12 +32,23 @@ public:
 	FTransform GetTransformMatrix() const;
 	const FMatrix& GetCacheWorldMatrix() const;
 
+protected:
+	void MarkWorldAABBDirty() { mbWorldAABBDirty = true; }
+	bool IsWorldAABBDirty() const { return mbWorldAABBDirty; }
+	void SetCacheWorldAABB(const FAABB& InAABB) const { mCacheWorldAABB = InAABB; mbWorldAABBDirty = false; }
+	const FAABB& GetCacheWorldAABB() const { return mCacheWorldAABB; }
+
 private:
+	void MarkTransformDirty() { mbMatrixDirty = true; mbWorldAABBDirty = true; }
+
 	FVector mRelativeLocation;
 	FRotator mRelativeRotation;
 	FVector mRelativeScale3D;
 
 	mutable FMatrix mCacheWorldMatrix;
 	mutable bool mbMatrixDirty = true;
+
+	mutable FAABB mCacheWorldAABB;
+	mutable bool mbWorldAABBDirty = true;
 };
 
