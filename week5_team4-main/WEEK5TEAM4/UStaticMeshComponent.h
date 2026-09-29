@@ -58,7 +58,7 @@ public:
 	FVector2 GetUVOffset(int32 index) const { return mUVOffsets[index]; }
 	void SetUVOffset(int32 index, const FVector2& InUVOffset) { mUVOffsets[index] = InUVOffset; }
 
-	void UpdateWorldCache();
+	bool UpdateWorldCache();
 	const FMatrix& GetCachedWorldMatrix() const;
 	const FAABB& GetCachedWorldBounds() const;
 

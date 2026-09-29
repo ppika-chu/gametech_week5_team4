@@ -30,9 +30,14 @@ public:
 
 	FTransform GetTransformMatrix() const;
 
+	void MarkTransformDirty();
+	bool IsTransformDirty() const;
+	void ClearTransformDirty();
+
 private:
-	FVector mRelativeLocation;
-	FRotator mRelativeRotation;
-	FVector mRelativeScale3D;
+	FVector		mRelativeLocation;
+	FRotator	mRelativeRotation;
+	FVector		mRelativeScale3D;
+	bool		bTransformDirty = true;
 };
 

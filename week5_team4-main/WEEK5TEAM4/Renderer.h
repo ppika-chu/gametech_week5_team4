@@ -527,6 +527,7 @@ private:
 	void CreateDepthStencilBuffer();
 
 	void BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32 StencilRef = 0) const;
+	void BindRasterizerState(ID3D11RasterizerState* Rasterizer) const;
 
 private:
     ID3D11Device* Device = nullptr;
@@ -567,6 +568,29 @@ private:
 	static constexpr uint32 MaxPSSampleSlots = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
 	mutable ID3D11SamplerState* BoundPSSamplers[MaxPSSampleSlots] = {};
 	mutable uint32 KnownPSSamplerMask = 0;
+
+	// 바인딩 캐시
+	mutable ID3D11RasterizerState* RasterizerState = nullptr;
+	mutable bool bIsChangedRasterizerState = true;
+
+	mutable ID3D11DepthStencilState* DepthStencilState = nullptr;
+	mutable bool bIsChangedDepthStencilState = true;
+
+	mutable ID3D11BlendState* BlendState = nullptr;
+	mutable bool bIsChangedBlendState = true;
+
+	mutable D3D11_PRIMITIVE_TOPOLOGY PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	mutable bool bIsChangedPrimitiveTopology = true;
+
+	mutable ID3D11InputLayout* InputLayout = nullptr;
+	mutable bool bIsChangedInputLayout = true;
+
+	mutable ID3D11VertexShader* VertexShader = nullptr;
+	mutable bool bIsChangedVertexShader = true;
+
+	mutable ID3D11PixelShader* PixelShader = nullptr;
+	mutable bool bIsChangedPixelShader = true;
+
 
 	// 와이어프레임 여부. Prepare에서 갱신하고 BindPipeline이 읽는다.
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.

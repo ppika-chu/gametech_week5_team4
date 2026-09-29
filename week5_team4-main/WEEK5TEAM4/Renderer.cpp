@@ -381,6 +381,10 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32
 {
 	// RSSetState는 드로우 직전마다 갈아치워지므로 뷰 모드 선택은 여기서 해야 한다.
 	// 이 모드를 지원하지 않는 파이프라인(2D/기즈모)은 Lit 상태로 폴백된다.
+
+
+
+
 	DeviceContext->RSSetState(Pipeline->GetRasterizerState(ViewModeIndex));
 	DeviceContext->OMSetDepthStencilState(Pipeline->DepthStencilState, StencilRef);
 	DeviceContext->OMSetBlendState(Pipeline->BlendState, nullptr, 0xffffffff);
@@ -388,6 +392,10 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline, uint32
 	DeviceContext->IASetInputLayout(Pipeline->InputLayout);
 	DeviceContext->VSSetShader(Pipeline->VertexShader, nullptr, 0);
 	DeviceContext->PSSetShader(Pipeline->PixelShader, nullptr, 0);
+
+
+
+
 	
 	if (Pipeline->ConstantBuffers.Num())
 	{
@@ -744,9 +752,26 @@ void URenderer::BindPSSamplers(uint32 StartSlot, uint32 Count, ID3D11SamplerStat
 	}
 }
 
+void URenderer::BindRasterizerState(ID3D11RasterizerState* Rasterizer) const
+{
+	if (bIsChangedRasterizerState || RasterizerState != Rasterizer)
+	{
+		bIsChangedRasterizerState = false;
+		RasterizerState = Rasterizer;
+		DeviceContext->RSSetState(RasterizerState);
+	}
+}
+
 void URenderer::InvalidateStateCache() const
 {
 	KnownPSSamplerMask = 0;
+	bIsChangedRasterizerState = true;
+	bIsChangedDepthStencilState = true;
+	bIsChangedBlendState = true;
+	bIsChangedPrimitiveTopology = true;
+	bIsChangedInputLayout = true;
+	bIsChangedVertexShader = true;
+	bIsChangedPixelShader = true;
 }
 
 //=============================================

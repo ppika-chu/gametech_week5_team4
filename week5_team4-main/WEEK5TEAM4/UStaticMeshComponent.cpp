@@ -163,13 +163,20 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
     return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
 }
 
-void UStaticMeshComponent::UpdateWorldCache()
+bool UStaticMeshComponent::UpdateWorldCache()
 {
+    if (!IsTransformDirty())
+    { 
+        return (false);
+    }
+
     mCachedWorldMatrix = GetTransformMatrix().MakeMatrix();
     if (mMeshAsset)
     {
         mCachedWorldBounds = mMeshAsset->GetLocalBoundingBox().ToWorld(mCachedWorldMatrix);
     }
+    ClearTransformDirty();
+    return (true);
 }
 
 const FMatrix& UStaticMeshComponent::GetCachedWorldMatrix() const
@@ -201,4 +208,5 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
         mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(Section.MaterialAssetID, true);
     }
     mMeshAsset = InMesh;
+    MarkTransformDirty();
 }

@@ -57,13 +57,21 @@ void	FBVH::Build(const TArray<AActor*>& Actors)
 
 void	FBVH::Refit()
 {
+	bool bAnyChanged = false;
 	for (FBVHPrimitive& Primitive : Primitives)
 	{
-		Primitive.StaticMeshComponent->UpdateWorldCache();
+		if (!Primitive.StaticMeshComponent->UpdateWorldCache())
+		{ 
+			continue;
+		}
 		Primitive.WorldAABB = Primitive.StaticMeshComponent->GetCachedWorldBounds();
-
-
 		Primitive.Centroid = (Primitive.WorldAABB.Min + Primitive.WorldAABB.Max) * 0.5f;
+		bAnyChanged = true;
+	}
+	
+	if (!bAnyChanged)
+	{
+		return;
 	}
 
 	for (int32 NodeIndex = Nodes.Num() - 1; NodeIndex >= 0; --NodeIndex)
