@@ -12,6 +12,8 @@ void USceneComponent::Initialize(FVector location, FRotator rotation, FVector sc
 	mRelativeLocation = location;
 	mRelativeRotation = rotation;
 	mRelativeScale3D = scale3D;
+
+	MarkTransformDirty();
 }
 
 USceneComponent::~USceneComponent()
@@ -56,6 +58,9 @@ void USceneComponent::DeserializeClass(const json::JSON& inJson)
 	mRelativeLocation = JsonUtils::FromJson<FVector>(propertiesJson.at("mRelativeLocation"));
 	mRelativeRotation = JsonUtils::FromJson<FRotator>(propertiesJson.at("mRelativeRotation"));
 	mRelativeScale3D = JsonUtils::FromJson<FVector>(propertiesJson.at("mRelativeScale3D"));
+
+	MarkTransformDirty();
+	OnTransformChanged();
 }
 
 FVector USceneComponent::GetRelativeLocation() const
@@ -72,8 +77,10 @@ void USceneComponent::SetRelativeLocation(FVector location)
 		return;
 	}
 
+	
 	mRelativeLocation = location;
 	OnTransformChanged();
+	MarkTransformDirty();
 }
 
 FRotator USceneComponent::GetRelativeRotation() const
@@ -92,6 +99,7 @@ void USceneComponent::SetRelativeRotation(FRotator rotation)
 
 	mRelativeRotation = rotation;
 	OnTransformChanged();
+	MarkTransformDirty();
 }
 
 FVector USceneComponent::GetRelativeScale3D() const
@@ -110,9 +118,27 @@ void USceneComponent::SetRelativeScale3D(FVector scale)
 
 	mRelativeScale3D = scale;
 	OnTransformChanged();
+	MarkTransformDirty();
 }
 
 FTransform USceneComponent::GetTransformMatrix() const
 {
 	return FTransform(mRelativeLocation, mRelativeRotation, mRelativeScale3D);
+}
+
+const FMatrix& USceneComponent::GetWorldMatrix() const
+{
+	if(bWorldMatrixDirty)
+	{
+		const FTransform Transform(mRelativeLocation, mRelativeRotation, mRelativeScale3D);
+		mCachedWorldMatrix = Transform.MakeMatrix();
+		bWorldMatrixDirty = false;
+	}
+	return mCachedWorldMatrix;
+}
+
+
+void USceneComponent::MarkTransformDirty()
+{
+	bWorldMatrixDirty = true;
 }

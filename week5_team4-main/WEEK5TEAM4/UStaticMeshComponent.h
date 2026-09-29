@@ -60,10 +60,22 @@ public:
 
 	UStaticMesh* StaticMesh = nullptr;
 
+protected:
+	void OnTransformChanged() override;
+
+private:
+	void MarkBoundsDirty();
+
 private:
 	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
 	TSharedPtr<FStaticMeshAsset> mMeshAsset;
 	TArray<TSharedPtr<FMaterialAsset>> mMaterialAssets;
 	TSharedPtr<FTexture2DAsset> mTextureAsset;
 	TArray<FVector2> mUVOffsets;
+
+	// 캐싱된 월드 바운딩 박스
+	mutable FAABB mCachedWorldBounds;
+
+	//월드 바운딩 박스가 다시 계산되어야 하는지 여부를 나타내는 플래그
+	mutable bool bWorldBoundsDirty = true;
 };

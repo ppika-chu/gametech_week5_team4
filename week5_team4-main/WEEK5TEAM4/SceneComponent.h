@@ -30,6 +30,9 @@ public:
 
 	FTransform GetTransformMatrix() const;
 
+	//실제 행렬을 반환하는 캐시 함수 
+	const FMatrix& GetWorldMatrix() const;
+
 protected:
 	virtual void OnTransformChanged() {}
 
@@ -37,5 +40,13 @@ private:
 	FVector mRelativeLocation;
 	FRotator mRelativeRotation;
 	FVector mRelativeScale3D;
+
+	void MarkTransformDirty();
+
+	// 실제 행렬을 캐싱하는 변수
+	mutable FMatrix mCachedWorldMatrix = FMatrix::Identity;
+
+	//다시 계산해야 하는지 여부를 나타내는 플래그
+	mutable bool bWorldMatrixDirty = true;
 };
 

@@ -101,11 +101,12 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
     }
 
 
-    const FMatrix ModelMatrix = GetTransformMatrix().MakeMatrix();
+    const FMatrix& ModelMatrix = GetWorldMatrix();
 
     // 로컬 AABB를 현재 위치·회전·스케일에 맞게
     // 월드 AABB로 변환
-    const FAABB WorldBoundingBox = mMeshAsset->GetLocalBoundingBox().ToWorld(ModelMatrix);
+    // 캐싱 사용
+    const FAABB WorldBoundingBox = GetBoundingBox();
 
     if (RenderCollector.bHasViewFrustum
         && !RenderCollector.Frustum.Intersects(
@@ -169,7 +170,14 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
         return FAABB();
     }
 
-    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetTransformMatrix().MakeMatrix());
+
+    if (bWorldBoundsDirty)
+    {
+        mCachedWorldBounds = mMeshAsset->GetLocalBoundingBox().ToWorld(GetWorldMatrix());
+        bWorldBoundsDirty = false;
+    }
+
+    return mCachedWorldBounds;
 }
 
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
@@ -180,6 +188,7 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 		mMaterialAssets.Empty();
 		mUVOffsets.Empty();
 		NotifyBoundsChanged();
+        MarkBoundsDirty();
 		return;
     }
 
@@ -193,4 +202,18 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
     }
     mMeshAsset = InMesh;
 	NotifyBoundsChanged();
+    MarkBoundsDirty();
+}
+
+void UStaticMeshComponent::MarkBoundsDirty()
+{
+    bWorldBoundsDirty = true;
+}
+
+void UStaticMeshComponent::OnTransformChanged()
+{
+    MarkBoundsDirty();
+
+    // 기존 BVH 갱신 알림을 유지
+    UPrimitiveComponent::OnTransformChanged();
 }
