@@ -120,8 +120,11 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 	
 	VertexBuffer = InRenderer.CreateVertexBuffer(InBuildData.Vertices.Data(), static_cast<uint32>(InBuildData.Vertices.Num()));
 	IndexBuffer = InRenderer.CreateIndexBuffer(InBuildData.Indices.Data(), static_cast<uint32>(InBuildData.Indices.Num()));
+	
+	// 삼각형 수가 200 보다 적으면 lod pass
+	constexpr int32 MinTriCountForLOD = 200;
 
-	if (!Indices.IsEmpty() && !Sections.IsEmpty())
+	if (!Indices.IsEmpty() && !Sections.IsEmpty() && static_cast<int32>(Indices.Num() / 3) >= MinTriCountForLOD)
 	{
 		LOD LodBuilder;
 
