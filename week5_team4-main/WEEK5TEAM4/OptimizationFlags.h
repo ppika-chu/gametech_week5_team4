@@ -1,8 +1,10 @@
 #pragma once
 #include "Core.h"
 
-// --- 배타적으로 하나만 고르는 모드 ---
-// 체크박스로 두면 "컬링 끔 + BVH 켬"처럼 의미 없는 조합이 생겨서 콤보로 묶었다.
+// LOD 전환 거리. LOD1만 슬라이더로 조정하고, LOD2는 그 값에 비례해서 살짝 더 멀리 잡는다.
+inline float GLOD1DistanceRatio = 50.0f;
+inline constexpr float GLOD2DistanceMultiplier = 1.5f;   
+inline float GetLOD2DistanceRatio() { return GLOD1DistanceRatio * GLOD2DistanceMultiplier; }
 
 enum class ECullingMode : uint8
 {

@@ -123,7 +123,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
         const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
         const float DistanceSq = (Center - RenderCollector.Camera->Transform.Location).LengthSquared();
 
-        constexpr float LODDistanceRatios[] = { 30.0f, 60.0f }; // LOD1, LOD2
+        const float LODDistanceRatios[] = { GLOD1DistanceRatio, GetLOD2DistanceRatio() }; // LOD1, LOD2
     
         for (int32 i = 0; i < mMeshAsset->GetLODCount() && i < 2; ++i)
         {
