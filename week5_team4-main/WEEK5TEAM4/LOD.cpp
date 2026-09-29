@@ -126,9 +126,16 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
     {
         if (A>B) std::swap(A, B);
         FQuadric Q = Quadrics[A] + Quadrics[B];
+
+        const FVector Mid = (Verts[A].Pos + Verts[B].Pos) * 0.5f;
+        const float EdgeLenSq = (Verts[A].Pos - Verts[B].Pos).LengthSquared();
+        
         FVector Target;
-        if(!Q.SolveOptimalPosition(Target))
-            Target = (Verts[A].Pos + Verts[B].Pos) * 0.5f;
+        if (!Q.SolveOptimalPosition(Target))
+            Target = Mid;
+        else if ((Target - Mid).LengthSquared() > EdgeLenSq * 4.0f)
+            Target = Mid;
+
         double Cost = Q.Error(Target);
         return {A, B, Target, Cost, VertVersion[A], VertVersion[B]};
     };
@@ -178,7 +185,7 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
                 VertTris[KeepIdx].Add(TriIdx);
             }
         }
-        
+
         Verts[KeepIdx].Pos = Top.Target;
         Quadrics[KeepIdx] = Quadrics[KeepIdx] + Quadrics[RemoveIdx];
         bVertAlive[RemoveIdx] = false;
