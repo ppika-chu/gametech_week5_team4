@@ -21,6 +21,7 @@ class URenderer;
 class FAssetManager;
 struct FVertexBuffer;
 struct FIndexBuffer;
+struct FMeshLOD;
 
 namespace BuiltInAssetID
 {
@@ -66,10 +67,15 @@ public:
 	inline const TArray<FVertex>& GetVertices() const { return Vertices; }
 	inline const TArray<uint32>& GetIndices() const { return Indices; }
 
+	inline int32 GetLODCount() const { return LODs.Num(); }
+	inline const FMeshLOD& GetLOD(int32 Index) const { return LODs[Index]; }
+
 private:
 	TSharedPtr<FVertexBuffer> VertexBuffer;
 	
 	TSharedPtr<FIndexBuffer> IndexBuffer;
+
+	TArray<FMeshLOD> LODs;
 
 	FAABB BoundingBox;
 
@@ -273,4 +279,13 @@ public:
 	virtual TSharedPtr<FAsset> LoadAsset(const FGuid& AssetID, const FName& AssetName, FArchive& Ar) override;
 	virtual void UnloadAsset(TSharedPtr<FAsset> Asset) override;
 	virtual EAssetType GetAssetType() const override { return EAssetType::Material; }
+};
+
+
+struct FMeshLOD
+{
+	TSharedPtr<FVertexBuffer> VertexBuffer;
+	TSharedPtr<FIndexBuffer> IndexBuffer;
+	TArray<FVertex> Vertices;
+	TArray<FStaticMeshSection> Sections;
 };

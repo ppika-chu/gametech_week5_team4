@@ -108,35 +108,38 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         return;
     }
 
-    // 지금 너무 부자연스러워서 일단 뺌.
-    #if 0
+    const TArray<FStaticMeshSection>* SectionsToUse = &mMeshAsset->GetSections();
+    Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBufferToUse = mMeshAsset->GetVertexBuffer();
+    Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
+
     // 너무 작은 픽셀은 render pass
-    // TODO : FOV / 해상도 반영한 정확한 화면 픽셀 크기 계산
-    // 지금은 그냥 오브젝트 반지름 대비 거리 비율 (100배보다 멀면 안 그림)
     if (RenderCollector.Camera)
     {
         const FAABB WorldBounds = GetBoundingBox();
-        const FVector Extent = (WorldBounds.Max - WorldBounds.Min) * 0.5f;
-        const float Radius = Extent.Length();
+        const float Radius = ((WorldBounds.Max - WorldBounds.Min) * 0.5f).Length();
         const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
         const float Distance = (Center - RenderCollector.Camera->Transform.Location).Length();
 
-        constexpr float MaxDistance = 100.0f;
-        
-        if (Distance > Radius * MaxDistance)
+        constexpr float LODDistanceRatios[] = { 30.0f, 60.0f }; // LOD1, LOD2
+    
+        for (int32 i = 0; i < mMeshAsset->GetLODCount() && i < 2; ++i)
         {
-            ++RenderCollector.CulledObjectCount;
-            return;
+            if (Distance > Radius * LODDistanceRatios[i])
+            {
+                const FMeshLOD& LOD = mMeshAsset->GetLOD(i);
+                SectionsToUse = &LOD.Sections;
+                VertexBufferToUse = LOD.VertexBuffer->Buffer;
+                IndexBufferToUse = LOD.IndexBuffer->Buffer;
+            }   
         }
     }
-    #endif
 
     // actor 당 한 번 count
     ++RenderCollector.DrawnObjectCount;
 
-    for (int32 SectionIndex = 0; SectionIndex < mMeshAsset->GetSections().Num(); ++SectionIndex)
+    for (int32 SectionIndex = 0; SectionIndex < SectionsToUse->Num(); ++SectionIndex)
     {
-        const FStaticMeshSection& Section = mMeshAsset->GetSections()[SectionIndex];
+        const FStaticMeshSection& Section = (*SectionsToUse)[SectionIndex];
 
         TSharedPtr<FMaterialAsset> Material = mMaterialAssets[SectionIndex];
 
@@ -160,8 +163,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector)
         }
 
         FRenderInfo RenderInfo;
-        RenderInfo.VertexBuffer = mMeshAsset->GetVertexBuffer();
-        RenderInfo.IndexBuffer = mMeshAsset->GetIndexBuffer();
+        RenderInfo.VertexBuffer = VertexBufferToUse;
+        RenderInfo.IndexBuffer = IndexBufferToUse;
         RenderInfo.StartIndex = Section.FirstIndex;
         RenderInfo.IndexCount = Section.IndexCount;
         RenderInfo.Texture = SectionTexture;
