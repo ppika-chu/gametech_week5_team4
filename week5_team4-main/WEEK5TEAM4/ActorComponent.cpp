@@ -47,3 +47,28 @@ void UActorComponent::RegisterPickTarget(FRenderCollector& RenderCollector, cons
 {
 	// 충돌체가 없는 컴포넌트는 픽킹 대상이 아니다.
 }
+
+void UActorComponent::SetEverTick()
+{
+	bCanEverTick = true;
+}
+
+void UActorComponent::SetTickEnabled(bool NewStatus)
+{
+	bTickEnabled = NewStatus;
+}
+
+bool UActorComponent::IsActiveTick() const
+{
+	return (bCanEverTick && bTickEnabled);
+}
+
+void UActorComponent::SetTickListIndex(int32 NewIndex)
+{
+	TickListIndex = NewIndex;
+}
+
+int32 UActorComponent::GetTickListIndex() const
+{
+	return (TickListIndex);
+}

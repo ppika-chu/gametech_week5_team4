@@ -20,6 +20,7 @@ class UPlaneComponent : public UPrimitiveComponent
 public:
 	UPlaneComponent()
 	{
+		SetEverTick();
 		mMeshAsset = FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(FName("PlaneMesh"), true);
 	}
 
@@ -152,6 +153,7 @@ class USpotLightComponent : public USceneComponent
 	REFLECT_CLASS(USpotLightComponent, USceneComponent)
 
 public:
+	USpotLightComponent() { SetEverTick(); }
 	void Tick(float DeltaTime) override
 	{
 		// NOTE: SpotLightComponent의 위치와 회전을 부모 액터에 맞춘다. 현재 Hierarchy가 없으므로 부모 액터의 위치와 회전만 가져와서 적용한다.
@@ -245,7 +247,7 @@ class UText3DComponent : public USceneComponent
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
 
 public:
-	UText3DComponent() = default;
+	UText3DComponent() { SetEverTick(); }
 
 	void SerializeClass(json::JSON& outJson) const override
 	{

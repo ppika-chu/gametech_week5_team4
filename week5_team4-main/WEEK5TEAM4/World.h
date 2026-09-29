@@ -25,12 +25,14 @@ public:
 	void Tick(float deltaTime);
 	void Render(float deltaTime, FRenderCollector& outCollector);
 	FBVH& GetBVH() { return mBVH; }
+	TArray<UActorComponent*>& GetTickComponents() { return TickComponents; }
+
+	void RegisterTick(UActorComponent* Component);
+	void UnregisterTick(UActorComponent* Component);
 
 private:
 	int32 getActorIndex(uint32 actorUUID) const;
 	FBVH mBVH;
-
-private:
 	enum
 	{
 		DEFAULT_RESERVE_MEM = 1024U
@@ -39,6 +41,6 @@ private:
 	// Todo: Must reserve
 	TArray<AActor*> mActors;
 
-
+	TArray<UActorComponent*> TickComponents;
 
 };
