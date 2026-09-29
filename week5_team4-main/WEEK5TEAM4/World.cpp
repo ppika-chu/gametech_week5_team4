@@ -129,9 +129,7 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);
 	outCollector.PickTargets.Reset(DEFAULT_RESERVE_MEM);
 
-	const bool bUseBVH = outCollector.Frustum
-		&& IsOptEnabled(EOptFlag::FrustumCulling)
-		&& IsOptEnabled(EOptFlag::BVHCulling);
+	const bool bUseBVH = outCollector.Frustum && GCullingMode == ECullingMode::BVH;
 
 	if (bUseBVH)
 	{
@@ -141,11 +139,25 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 			Component->Render(outCollector, WorldBounds);
 
 			// 브루트포스 피킹을 쓸 때만 후보 목록이 필요하다.
-			if (!IsOptEnabled(EOptFlag::BVHPicking))
+			if (GPickingMode == EPickingMode::BruteForce)
 			{
 				Component->RegisterPickTarget(outCollector, WorldBounds);
 			}
 		});
+
+		if (FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
+		{
+			for (AActor* actor : mActors)
+			{
+				for (UActorComponent* component : actor->GetComponents())
+				{
+					if (!component->Cast<UPrimitiveComponent>())
+					{
+						component->Render(outCollector, component->GetBoundingBox());
+					}
+				}
+			}
+		}
 	}
 	else{
 		
