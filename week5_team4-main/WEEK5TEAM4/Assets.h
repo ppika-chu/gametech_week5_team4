@@ -59,7 +59,9 @@ public:
 
 	Microsoft::WRL::ComPtr<ID3D11Buffer> GetVertexBuffer() const;
 	uint32 GetVertexCount() const;
+	ID3D11Buffer* GetVertexBufferRaw() const;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> GetIndexBuffer() const;
+	ID3D11Buffer* GetIndexBufferRaw() const;
 	uint32 GetIndexCount() const;
 	inline uint32 GetSubMeshCount() const { return Sections.Num(); }
 	inline const FAABB& GetLocalBoundingBox() const { return BoundingBox; }

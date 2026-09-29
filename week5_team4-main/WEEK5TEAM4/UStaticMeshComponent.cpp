@@ -115,8 +115,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
     }
 
     const TArray<FStaticMeshSection>* SectionsToUse = &mMeshAsset->GetSections();
-    Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBufferToUse = mMeshAsset->GetVertexBuffer();
-    Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
+    ID3D11Buffer* VertexBufferToUse = mMeshAsset->GetVertexBufferRaw();
+    ID3D11Buffer* IndexBufferToUse = mMeshAsset->GetIndexBufferRaw();
 
     // 너무 작은 픽셀은 LOD
     if (RenderCollector.Camera && IsOptEnabled(EOptFlag::LOD))
@@ -133,8 +133,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
             {
                 const FMeshLOD& LOD = mMeshAsset->GetLOD(i);
                 SectionsToUse = &LOD.Sections;
-                VertexBufferToUse = LOD.VertexBuffer->Buffer;
-                IndexBufferToUse = LOD.IndexBuffer->Buffer;
+                VertexBufferToUse = LOD.VertexBuffer->Buffer.Get();
+                IndexBufferToUse = LOD.IndexBuffer->Buffer.Get();
             }   
         }
     }
@@ -156,19 +156,17 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
                 Material->GetOpacity())
             : FVector4(1, 1, 1, 1);
 
-        FRenderInfo RenderInfo;
+        FRenderInfo& RenderInfo = RenderCollector.RenderInfos.Emplace();
         RenderInfo.VertexBuffer = VertexBufferToUse;
         RenderInfo.IndexBuffer = IndexBufferToUse;
         RenderInfo.StartIndex = Section.FirstIndex;
         RenderInfo.IndexCount = Section.IndexCount;
-        RenderInfo.Texture = mSectionTextures[SectionIndex];
+        RenderInfo.Texture = mSectionTextures[SectionIndex].get();
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
         RenderInfo.Model = GetCacheWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
-
-        RenderCollector.RenderInfos.Add(std::move(RenderInfo));
     }
 }
 

@@ -602,21 +602,21 @@ void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeli
 {
 	BindPipeline(Pipeline, StencilRef);
 
-	ID3D11Buffer* CurrentVB = RenderInfo.VertexBuffer.Get();
+	ID3D11Buffer* CurrentVB = RenderInfo.VertexBuffer;
 	if (LastVertexBuffer != CurrentVB || LastVertexStride != Pipeline->Stride)
 	{
 		UINT Offset = 0;
-		DeviceContext->IASetVertexBuffers(0, 1, RenderInfo.VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);
+		DeviceContext->IASetVertexBuffers(0, 1, &RenderInfo.VertexBuffer, &Pipeline->Stride, &Offset);
 		LastVertexBuffer = CurrentVB;
 		LastVertexStride = Pipeline->Stride;
 	}	
 
 	if (RenderInfo.IndexBuffer)
 	{
-		ID3D11Buffer* CurrentIB = RenderInfo.IndexBuffer.Get();
+		ID3D11Buffer* CurrentIB = RenderInfo.IndexBuffer;
 		if (LastIndexBuffer != CurrentIB)
 		{
-			DeviceContext->IASetIndexBuffer(RenderInfo.IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			DeviceContext->IASetIndexBuffer(RenderInfo.IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 			LastIndexBuffer = CurrentIB;
 		}
 		DeviceContext->DrawIndexed(RenderInfo.IndexCount, RenderInfo.StartIndex, 0);
