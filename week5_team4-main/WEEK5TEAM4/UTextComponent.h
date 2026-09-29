@@ -12,6 +12,7 @@
 #include "JsonUtil.h"
 #include "FTextBuilder.h"
 #include "EngineMathLibrary.h"
+#include "OptimizationFlags.h"
 
 class UPlaneComponent : public UPrimitiveComponent
 {
@@ -72,7 +73,8 @@ public:
 			return;
 		}
 
-		if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+		// Linear 모드에서만 여기서 컬링한다. BVH 모드는 QueryFrustum에서 이미 아이템 단위까지 걸러서 넘겨준다.
+		if (GCullingMode == ECullingMode::Linear && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
 		{
 			++RenderCollector.CulledObjectCount;
 			return;

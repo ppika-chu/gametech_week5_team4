@@ -276,6 +276,41 @@ struct FFrustum
 		return F;
 	}
 
+	enum class EFrustumTestResult { Outside, Inside, Intersect };
+
+	EFrustumTestResult ClassifyAABB(const FAABB& AABB, uint32& PlaneMask) const
+	{
+		FVector Center;
+		FVector Extent;
+
+		Center = (AABB.Max + AABB.Min) * 0.5f;
+		Extent = (AABB.Max - AABB.Min) * 0.5f;
+
+		for (int32 i = 0; i < 6; i++)
+		{
+			if ((PlaneMask & (1u << i)) == 0)
+			{
+				continue;
+			}
+
+			const FVector4& Plane = Planes[i];
+
+			float Distance = Plane.x * Center.x + Plane.y * Center.y + Plane.z * Center.z + Plane.w;
+			float ProjectedExtent = FMath::Abs(Plane.x) * Extent.x
+				+ FMath::Abs(Plane.y) * Extent.y
+				+ FMath::Abs(Plane.z) * Extent.z;
+
+			if (Distance < -ProjectedExtent)
+				return (EFrustumTestResult::Outside);
+			else if (Distance > ProjectedExtent)
+				PlaneMask &= ~(1u << i);
+		}
+		if (PlaneMask == 0)
+			return (EFrustumTestResult::Inside);
+
+		return (EFrustumTestResult::Intersect);
+	}
+
 	inline bool Intersects(const FAABB& AABB) const
 	{
 		// 각 축의 중심

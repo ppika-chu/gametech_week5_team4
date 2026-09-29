@@ -152,38 +152,60 @@ int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End, int3
     return NodeIndex;
 }
 
+namespace {
+    struct FCullStackEntry
+    {
+        int32  NodeIndex;
+        uint32 PlaneMask;
+    };
+}
+
 // Frustum culling 용
 void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor) const
 {
     if (RootIndex < 0) return;
 
-    TArray<int32> Stack;
-    Stack.Add(RootIndex);
+    TArray<FCullStackEntry> Stack;
+    Stack.Reserve(64);
+    Stack.Add({ RootIndex, 0b111111 });   // 루트는 6개 평면 전부 검사
 
     while (Stack.Num() > 0)
     {
-        const int32 CurrentIndex = Stack.Last();
+        const FCullStackEntry Entry = Stack.Last();
         Stack.RemoveLast();
-        
-        const FNode& CurrentNode = Nodes[CurrentIndex];
-        
-        // Frustum 내에 없으면 그 아래 자식 노드 모두 skip
-        if (!Frustum.Intersects(CurrentNode.Bounds))    continue;
 
-        // Leaf node 이면 그 안에 있는 Item들만 검사 대상
-        if (CurrentNode.Left < 0)
+        const FNode& CurrentNode = Nodes[Entry.NodeIndex];
+
+        // 부모가 이미 Inside면(마스크 0) 판정을 건너뛴다
+        uint32 Mask = Entry.PlaneMask;
+        if (Mask != 0 && Frustum.ClassifyAABB(CurrentNode.Bounds, Mask) == FFrustum::EFrustumTestResult::Outside)
+        {
+            continue;   // 서브트리 전체 버림
+        }
+
+        if (CurrentNode.Left < 0)   // 리프
         {
             for (UPrimitiveComponent* Item : CurrentNode.Items)
             {
+                // 노드가 Inside면 아이템도 안쪽이 확실하다. 걸쳐 있을 때만 남은 평면으로 판정
+                if (Mask != 0)
+                {
+                    uint32 ItemMask = Mask;
+                    if (Frustum.ClassifyAABB(Item->GetBoundingBox(), ItemMask) == FFrustum::EFrustumTestResult::Outside)
+                    {
+                        continue;
+                    }
+                }
                 Visitor(Item);
             }
         }
         else
         {
-            Stack.Add(CurrentNode.Left);
-            Stack.Add(CurrentNode.Right);
+            // 자식은 줄어든 마스크를 물려받는다 (Inside면 0이 전달됨)
+            Stack.Add({ CurrentNode.Left,  Mask });
+            Stack.Add({ CurrentNode.Right, Mask });
         }
-    };
+    }
 }
 
 // Picking 용 (Ray와 가장 가까운 Component 반환)

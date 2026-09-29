@@ -106,8 +106,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
 
 
     // Frustum Culling
-    // BVH 모드에서도 남겨둔다. BVH는 리프(4개 묶음) 단위라 경계에 걸친 것은 여기서 정밀하게 걸러진다.
-    if (GCullingMode != ECullingMode::Off
+    // Linear 모드에서만 여기서 컬링한다. BVH 모드는 QueryFrustum에서 이미 아이템 단위까지 걸러서 넘겨준다.
+    if (GCullingMode == ECullingMode::Linear
         && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
     {
         ++RenderCollector.CulledObjectCount;
