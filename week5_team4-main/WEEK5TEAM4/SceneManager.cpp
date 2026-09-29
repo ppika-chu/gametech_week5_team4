@@ -489,35 +489,45 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("FPS");
 			ImGui::PopStyleColor();
-			
+
 			const float FrameTimeMs = guiReference.FrameTimer->GetFrameTimeMs();
 			const float GPUTimeMs = guiReference.GraphicsManager->GetGpuRenderTime();
-			float TrueFrameTimeMs = max(FrameTimeMs, GPUTimeMs);
-			float TrueFPS = TrueFrameTimeMs > 0.f ? 1000.0f / TrueFrameTimeMs : 0.f;
-			const float CPUTimeMs = TrueFrameTimeMs - GPUTimeMs;
+			const float TrueFrameTimeMs = (std::max)(FrameTimeMs, GPUTimeMs);
 
-			ImGui::Text("FPS: %.1f", TrueFPS);
+			// 지수 이동 평균. Alpha가 작을수록 더 부드럽고 더 느리게 따라온다.
+			static constexpr float Alpha = 0.2f;
+			static float SmoothFrameMs = TrueFrameTimeMs;
+			static float SmoothGpuMs = GPUTimeMs;
+
+			SmoothFrameMs += (TrueFrameTimeMs - SmoothFrameMs) * Alpha;
+			SmoothGpuMs   += (GPUTimeMs       - SmoothGpuMs)   * Alpha;
+
+			const float ShownFPS = SmoothFrameMs > 0.f ? 1000.0f / SmoothFrameMs : 0.f;
+			const float ShownCpuMs = (std::max)(SmoothFrameMs - SmoothGpuMs, 0.f);
+
+			ImGui::Text("FPS: %.1f", ShownFPS);
+			ImGui::Text("Frame Time: %.2f ms", SmoothFrameMs);
 			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
 			// CPU / GPU
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
-			ImGui::SeparatorText("Bottleneck");
-			ImGui::PopStyleColor();
+			// ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			// ImGui::SeparatorText("Bottleneck");
+			// ImGui::PopStyleColor();
 
-			ImGui::Text("Frame Time: %.2f ms", TrueFrameTimeMs);
-			ImGui::Text("GPU Time: %.2f ms", GPUTimeMs);
-			ImGui::Text("CPU Time (est.): %.2f ms", CPUTimeMs);
+			// ImGui::Text("GPU Time: %.2f ms", SmoothGpuMs);
+			// ImGui::Text("CPU Time (est.): %.2f ms", ShownCpuMs);
 
-			if (TrueFrameTimeMs > 0.f)
-			{
-				const float GPURatio = GPUTimeMs / TrueFrameTimeMs;
-				const bool bGPUBound = GPURatio > 0.8f;
+			// if (SmoothFrameMs > 0.f)
+			// {
+			// 	const float GPURatio = SmoothGpuMs / SmoothFrameMs;
+			// 	const bool bGPUBound = GPURatio > 0.8f;
 
-				ImGui::TextColored(
-					bGPUBound? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
-					"GPU Ratio: %.2f %%", GPURatio*100.0f);
+			// 	ImGui::TextColored(
+			// 		bGPUBound? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f),
+			// 		"GPU Ratio: %.2f %%", GPURatio*100.0f);
 	
-			}
+			// }
+
 			// Picking
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Picking");
@@ -744,6 +754,19 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	
 	ImGui::SeparatorText("Optimization");
 	{
+		// 배타 선택은 콤보로
+		int32 CullingIndex = static_cast<int32>(GCullingMode);
+		if (ImGui::Combo("Culling", &CullingIndex, GCullingModeNames, IM_ARRAYSIZE(GCullingModeNames)))
+		{
+			GCullingMode = static_cast<ECullingMode>(CullingIndex);
+		}
+
+		int32 PickingIndex = static_cast<int32>(GPickingMode);
+		if (ImGui::Combo("Picking", &PickingIndex, GPickingModeNames, IM_ARRAYSIZE(GPickingModeNames)))
+		{
+			GPickingMode = static_cast<EPickingMode>(PickingIndex);
+		}
+
 		// 항목 추가 시, OptimizationFlags.h의 GOptFlagInfos에 적으면 됨.
 		for (const FOptFlagInfo& Info : GOptFlagInfos)
 		{
@@ -760,11 +783,15 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 		if (ImGui::Button("All on"))
 		{
+			GCullingMode = ECullingMode::BVH;
+			GPickingMode = EPickingMode::BVHFrustum;
 			for (bool& b : GOptEnabled) { b = true; }
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("All Off"))
 		{
+			GCullingMode = ECullingMode::Off;
+			GPickingMode = EPickingMode::BruteForce;
 			for (bool& b : GOptEnabled) { b = false; }
 		}
 	}
