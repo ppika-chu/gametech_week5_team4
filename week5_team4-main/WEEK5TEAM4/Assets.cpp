@@ -11,6 +11,7 @@
 #include "FTexture2DImporter.h"
 #include "AssetFileIOs.h"
 #include "LOD.h"
+#include "FMeshBVH.h"
 
 namespace
 {
@@ -120,8 +121,13 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 	
 	VertexBuffer = InRenderer.CreateVertexBuffer(InBuildData.Vertices.Data(), static_cast<uint32>(InBuildData.Vertices.Num()));
 	IndexBuffer = InRenderer.CreateIndexBuffer(InBuildData.Indices.Data(), static_cast<uint32>(InBuildData.Indices.Num()));
+	
+	MeshBVH.Build(Vertices, Indices);
+	
+	// 삼각형 수가 200 보다 적으면 lod pass
+	constexpr int32 MinTriCountForLOD = 200;
 
-	if (!Indices.IsEmpty() && !Sections.IsEmpty())
+	if (!Indices.IsEmpty() && !Sections.IsEmpty() && static_cast<int32>(Indices.Num() / 3) >= MinTriCountForLOD)
 	{
 		LOD LodBuilder;
 
@@ -131,6 +137,8 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 		// LOD 2
 		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.25f, InRenderer));
 	}
+
+
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> FStaticMeshAsset::GetVertexBuffer() const
@@ -401,17 +409,32 @@ const FVector4& FSpriteAtlasAsset::GetFrameSubUV(int32 FrameIndex) const
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetDiffuseTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(DiffuseTexture, true);
+    if (!bDiffuseResolved)
+    {
+        CachedDiffuseTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(DiffuseTexture, true);
+        bDiffuseResolved = true;
+    }
+    return CachedDiffuseTexture;
 }
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetSpecularTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(SpecularTexture, true);
+	if (!bSpecularResolved)
+	{
+		CachedSpecularTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(SpecularTexture, true);
+		bSpecularResolved = true;
+	}
+	return CachedSpecularTexture;
 }
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetNormalTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(NormalTexture, true);
+	if (!CachedNormalTexture)
+	{
+		CachedNormalTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(NormalTexture, true);
+		bNormalResolved = true;
+	}
+	return CachedNormalTexture;
 }
 
 TSharedPtr<FAsset> FMaterialAssetLoader::LoadAsset(const FGuid& AssetID, const FName& AssetName, FArchive& Ar)
@@ -432,6 +455,7 @@ TSharedPtr<FAsset> FMaterialAssetLoader::LoadAsset(const FGuid& AssetID, const F
 	Ar << NormalTexture;
 	#endif
 
+	// TODO: 머티리얼 살아있는 동안 텍스처 에셋이 핫리로드/ 없음)
 	return MakeShared<FMaterialAsset>(AssetID,
 									  AssetName,
 									  Payload.AmbientColor,

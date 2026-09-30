@@ -264,9 +264,9 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		const FInputState& Input = WindowApplication.Input;
 
 		// 드래그 중 마우스 피킹이 실행되어 선택된 액터가 풀리는 것 방지
-		bool bIsAssetDragging = (ImGui::GetDragDropPayload != nullptr);
+		bool bIsAssetDragging = (ImGui::GetDragDropPayload() != nullptr);
 
-		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && bIsAssetDragging)
+		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && !bIsAssetDragging)
 		{
 			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector, mSceneManager->GetCurrentWorld()->GetBVH());
 			if (HitActor)
