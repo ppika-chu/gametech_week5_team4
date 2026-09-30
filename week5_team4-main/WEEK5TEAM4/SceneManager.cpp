@@ -129,6 +129,11 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
+	if (ImGui::IsKeyPressed(ImGuiKey_F11, false))
+	{
+		mIsViewportFullscreen = !mIsViewportFullscreen;
+	}
+
 	{
 		// Docking
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -165,14 +170,37 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::DockBuilderFinish(dockspaceID);
 		}
 
-		ImGui::DockSpaceOverViewport(dockspaceID, viewport, flags);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-		const ImGuiWindowFlags ViewportWindowFlags =
+		ImGuiWindowFlags ViewportWindowFlags =
 			ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse;
 
-		if (ImGui::Begin("Viewport", nullptr, ViewportWindowFlags))
+		// 전체화면일 때 도킹 레이아웃은 그리지 않고 살려만 둔다 (패널들이 도킹 해제되지 않도록).
+		// 뷰포트는 도킹되지 않은 별도 창으로 화면 전체를 덮는다.
+		const char* ViewportWindowName = "Viewport";
+		if (mIsViewportFullscreen)
+		{
+			ImGui::DockSpace(dockspaceID, ImVec2(0, 0), ImGuiDockNodeFlags_KeepAliveOnly);
+
+			ImGui::SetNextWindowPos(viewport->Pos);
+			ImGui::SetNextWindowSize(viewport->Size);
+			ImGui::SetNextWindowViewport(viewport->ID);
+
+			ViewportWindowFlags |=
+				ImGuiWindowFlags_NoDecoration |
+				ImGuiWindowFlags_NoMove |
+				ImGuiWindowFlags_NoDocking |
+				ImGuiWindowFlags_NoSavedSettings |
+				ImGuiWindowFlags_NoBringToFrontOnFocus;
+			ViewportWindowName = "##ViewportFullscreen";
+		}
+		else
+		{
+			ImGui::DockSpaceOverViewport(dockspaceID, viewport, flags);
+		}
+
+		if (ImGui::Begin(ViewportWindowName, nullptr, ViewportWindowFlags))
 		{
 			const ImVec2 Origin = ImGui::GetCursorScreenPos();
 			const ImVec2 TotalSize = ImGui::GetContentRegionAvail();
@@ -190,7 +218,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 			const float DrawerBoundary = MainVP->WorkPos.y + MainVP->WorkSize.y - mContentBrowser.GetDrawerHeight() - mBottomBarHeight;
 
-			bool bIsMouseOnDrawerBoundary = (IO.MousePos.y >= DrawerBoundary) && mContentBrowser.IsDrawerOpen();
+			bool bIsMouseOnDrawerBoundary = !mIsViewportFullscreen && (IO.MousePos.y >= DrawerBoundary) && mContentBrowser.IsDrawerOpen();
 
 			for (int32 i = 0; i < guiReference.ViewportCount; ++i)
 			{
@@ -345,45 +373,48 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 		const ImGuiViewport* Viewport = ImGui::GetMainViewport();
 
-		ImGui::SetNextWindowPos(ImVec2(Viewport->WorkPos.x, Viewport->WorkPos.y + Viewport->WorkSize.y - mBottomBarHeight));
-		ImGui::SetNextWindowSize(ImVec2(Viewport->WorkSize.x, mBottomBarHeight));
-		ImGui::SetNextWindowViewport(Viewport->ID);
-
-		const ImGuiWindowFlags BottomBarFlags =
-			ImGuiWindowFlags_NoDecoration |
-			ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoSavedSettings |
-			ImGuiWindowFlags_NoDocking;
-
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 3.0f));
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(24, 24, 24, 255));
-
-		if (ImGui::Begin("##EditorBottomBar", nullptr, BottomBarFlags))
+		if (!mIsViewportFullscreen)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(45, 45, 48, 255));
+			ImGui::SetNextWindowPos(ImVec2(Viewport->WorkPos.x, Viewport->WorkPos.y + Viewport->WorkSize.y - mBottomBarHeight));
+			ImGui::SetNextWindowSize(ImVec2(Viewport->WorkSize.x, mBottomBarHeight));
+			ImGui::SetNextWindowViewport(Viewport->ID);
 
-			if (ImGui::Button("[ Content Drawer] (Ctrl+Space)"))
+			const ImGuiWindowFlags BottomBarFlags =
+				ImGuiWindowFlags_NoDecoration |
+				ImGuiWindowFlags_NoMove |
+				ImGuiWindowFlags_NoSavedSettings |
+				ImGuiWindowFlags_NoDocking;
+
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 3.0f));
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(24, 24, 24, 255));
+
+			if (ImGui::Begin("##EditorBottomBar", nullptr, BottomBarFlags))
 			{
-				ConsoleWindow::Get().SetIsDrawerOpen(false);
-				mContentBrowser.ToggleDrawer();
+				ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(45, 45, 48, 255));
+
+				if (ImGui::Button("[ Content Drawer] (Ctrl+Space)"))
+				{
+					ConsoleWindow::Get().SetIsDrawerOpen(false);
+					mContentBrowser.ToggleDrawer();
+				}
+
+				ImGui::SameLine();
+
+				if (ImGui::Button("[ Console ]"))
+				{
+					ConsoleWindow::Get().ToggleDrawer();
+					mContentBrowser.SetIsDrawerOpen(false);
+				}
+
+				ImGui::PopStyleColor();
 			}
 
-			ImGui::SameLine();
-
-			if (ImGui::Button("[ Console ]"))
-			{
-				ConsoleWindow::Get().ToggleDrawer();
-				mContentBrowser.SetIsDrawerOpen(false);
-			}
+			ImGui::End();
 
 			ImGui::PopStyleColor();
+			ImGui::PopStyleVar(2);
 		}
-
-		ImGui::End();
-
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(2);
 
 		ConsoleWindow& console = ConsoleWindow::Get();
 		if (console.bShowStatFPS || console.bShowStatMemory || console.bShowStatRender)
@@ -507,18 +538,18 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			const float ShownCpuMs = (std::max)(SmoothFrameMs - SmoothGpuMs, 0.f);
 
 			// 순간값: 직전 한 프레임의 시간만으로 계산 (매 프레임 흔들림, 비교용)
-			ImGui::Text("FPS (Tick): %.1f", guiReference.FrameTimer->GetFPS());
-			ImGui::Text("Frame Time (Tick): %.2f ms", FrameTimeMs);
+			// ImGui::Text("FPS (Tick): %.1f", guiReference.FrameTimer->GetFPS());
+			// ImGui::Text("Frame Time (Tick): %.2f ms", FrameTimeMs);
 
 			// 지수 이동 평균: 매 프레임 부드럽게 따라가는 화면 표시용 값
-			ImGui::Text("FPS (EMA): %.1f", ShownFPS);
-			ImGui::Text("Frame Time (EMA): %.2f ms", SmoothFrameMs);
+			// ImGui::Text("FPS (EMA): %.1f", ShownFPS);
+			// ImGui::Text("Frame Time (EMA): %.2f ms", SmoothFrameMs);
 
 			// 구간 평균: 0.5초 동안 실제로 그린 프레임 수 기준. 측정/비교용 값
 			const FFrameTimer* Timer = guiReference.FrameTimer;
 			ImGui::Text("FPS (0.5s Avg): %.1f", Timer->GetIntervalAverageFPS());
 			ImGui::Text("Frame Time (0.5s Avg): %.2f ms", Timer->GetIntervalAverageFrameMs());
-			ImGui::Text("Frame Min / Max: %.2f / %.2f ms", Timer->GetIntervalMinFrameMs(), Timer->GetIntervalMaxFrameMs());
+			// ImGui::Text("Frame Min / Max: %.2f / %.2f ms", Timer->GetIntervalMinFrameMs(), Timer->GetIntervalMaxFrameMs());
 
 			// 해상도: 창(백버퍼) 전체와 3D 씬이 그려지는 뷰포트 영역
 			const URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
@@ -551,7 +582,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PopStyleColor();
 			
 			ImGui::Text("Picking Count: %llu", guiReference.ViewportClient->GetPickAttemptCount());
-			ImGui::Text("Last Ray Test Count: %llu", guiReference.ViewportClient->GetLastPickTestCount());
+			// ImGui::Text("Last Ray Test Count: %llu", guiReference.ViewportClient->GetLastPickTestCount());
 			ImGui::Text("Accumulated Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
 			ImGui::Text("Last Picking Time: %.4f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.4f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
@@ -564,6 +595,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::Text("Drawn Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetDrawnObjCount());
 			ImGui::Text("Culled Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetCulledObjCount());
 
+			#if 0
 			// Stats: FScopeCycleCounter로 측정한 구간별 시간 (등록 순서대로)
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
 			ImGui::SeparatorText("Stats");
@@ -587,10 +619,17 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 				}
 			}
 
+			#endif
 			ImGui::PopStyleColor();
 			ImGui::PopFont();
 			ImGui::End();
 		}
+	}
+
+	// 전체화면: 뷰포트 외 패널/드로어는 제출하지 않는다.
+	if (mIsViewportFullscreen)
+	{
+		return;
 	}
 
 #if IS_OBJ_VIEWER
@@ -793,6 +832,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		}
 	}
 	
+	#if 0
 	ImGui::SeparatorText("Optimization");
 	{
 		// 배타 선택은 콤보로
@@ -822,7 +862,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			}
 		}
 
-		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 0.0f, 150.0f);
+		ImGui::SliderFloat("LOD Distance", &GLOD1DistanceRatio, 0.0f, 150.0f);
 
 		if (ImGui::Button("All on"))
 		{
@@ -838,7 +878,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			for (bool& b : GOptEnabled) { b = false; }
 		}
 	}
-
+	#endif
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
 

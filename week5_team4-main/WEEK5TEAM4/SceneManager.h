@@ -105,6 +105,9 @@ private:
 	float mViewportHeight;
 	float mBottomBarHeight;
 
+	// F11: 뷰포트만 화면 전체에 표시하고 나머지 패널은 숨긴다.
+	bool mIsViewportFullscreen = false;
+
 	UWorld* mCurrentWorld = nullptr;
 	AActor* mSelectedActor = nullptr;
 	FGuiInputField mGuiInputField;
