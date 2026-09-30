@@ -75,6 +75,7 @@ public:
 
 	FCamera* Camera = nullptr;
 	const FFrustum* Frustum = nullptr;		// viewport의 frustum
+	const struct FHZB* HZB = nullptr;		// 오클루전 판정용 깊이 피라미드 (없으면 오클루전 컬링 안 함)
 
 	TArray<FRenderInfo>     RenderInfos;   	// 메시 패스
 	TArray<FRenderLineInfo> LineInfos;     	// 라인 패스

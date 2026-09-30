@@ -177,7 +177,7 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 			{
 				Component->RegisterPickTarget(outCollector, WorldBounds);
 			}
-		});
+		}, outCollector.HZB);
 
 		if (FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
 		{

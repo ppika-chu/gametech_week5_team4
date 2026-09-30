@@ -802,6 +802,31 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			GCullingMode = static_cast<ECullingMode>(CullingIndex);
 		}
 
+		// 오클루전 컬링(HZB) 켜기/끄기 버튼. 아래 체크박스 목록의 "HZB Occlusion"과 같은 값을 바꾼다.
+		{
+			bool& bOcclusion = GOptEnabled[static_cast<uint8>(EOptFlag::HZBOcclusion)];
+			ImGui::PushStyleColor(ImGuiCol_Button, bOcclusion ? ImVec4(0.20f, 0.55f, 0.25f, 1.0f) : ImVec4(0.45f, 0.20f, 0.20f, 1.0f));
+			if (ImGui::Button(bOcclusion ? "Occlusion Culling: ON" : "Occlusion Culling: OFF"))
+			{
+				bOcclusion = !bOcclusion;
+			}
+			ImGui::PopStyleColor();
+
+			// 켜져 있어도 실제로는 동작하지 않는 조건을 알려 준다 (LaunchEngineLoop의 bUseHZB 조건과 동일)
+			if (bOcclusion)
+			{
+				ImGui::SameLine();
+				if (guiReference.EditorLayout && guiReference.EditorLayout->bIsSplitView)
+				{
+					ImGui::TextDisabled("(4분할에서는 꺼짐)");
+				}
+				else if (GCullingMode == ECullingMode::Off)
+				{
+					ImGui::TextDisabled("(Culling Off에서는 꺼짐)");
+				}
+			}
+		}
+
 		int32 PickingIndex = static_cast<int32>(GPickingMode);
 		if (ImGui::Combo("Picking", &PickingIndex, GPickingModeNames, IM_ARRAYSIZE(GPickingModeNames)))
 		{
