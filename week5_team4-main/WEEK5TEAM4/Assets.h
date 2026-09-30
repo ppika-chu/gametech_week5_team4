@@ -84,7 +84,7 @@ private:
 	TArray<uint32> Indices;
 
 	TArray<FStaticMeshSection> Sections;
-	FMeshBVH& MeshBVH;
+	FMeshBVH MeshBVH;
 };
 
 class FStaticMeshAssetLoader : public FAssetLoader

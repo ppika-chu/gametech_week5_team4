@@ -11,6 +11,7 @@
 #include "FTexture2DImporter.h"
 #include "AssetFileIOs.h"
 #include "LOD.h"
+#include "FMeshBVH.h"
 
 namespace
 {
@@ -121,6 +122,8 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 	VertexBuffer = InRenderer.CreateVertexBuffer(InBuildData.Vertices.Data(), static_cast<uint32>(InBuildData.Vertices.Num()));
 	IndexBuffer = InRenderer.CreateIndexBuffer(InBuildData.Indices.Data(), static_cast<uint32>(InBuildData.Indices.Num()));
 	
+	MeshBVH.Build(Vertices, Indices);
+	
 	// 삼각형 수가 200 보다 적으면 lod pass
 	constexpr int32 MinTriCountForLOD = 200;
 
@@ -134,6 +137,8 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 		// LOD 2
 		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.25f, InRenderer));
 	}
+
+
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> FStaticMeshAsset::GetVertexBuffer() const

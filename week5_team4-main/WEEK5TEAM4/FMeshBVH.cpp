@@ -46,7 +46,7 @@ void FMeshBVH::Build(const TArray<FVertex>& Vertices, const TArray<uint32>& Indi
 
 bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, float& InOutMaxT) const
 {
-    if (RootIndex < 0) return nullptr;
+    if (RootIndex < 0) return false;
     
     const FRay LocalRay(LocalOrigin, LocalDir);
     bool bHit = false;
