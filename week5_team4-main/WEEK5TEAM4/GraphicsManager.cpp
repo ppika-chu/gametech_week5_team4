@@ -47,6 +47,12 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mHighlightDrawPipeline->SetShader("Assets/Shaders/Outline.hlsl");
 	mHighlightDrawPipeline->AddConstantBuffer<FOutlineConstants>();
 
+	// HZB: 씬 깊이를 4x4 블록 max로 줄이는 전체 화면 패스
+	mHZBPipeline = mRenderer->CreateRenderPipeline();
+	mHZBPipeline->SetRasterRizerState(D3D11_CULL_NONE);   // 와이어프레임 뷰 모드여도 Lit(면 채우기) 상태로 그린다
+	mHZBPipeline->SetDepthStencilState(false, false);
+	mHZBPipeline->SetShader("Assets/Shaders/HZBDownsample.hlsl");
+
 	mHighlightVertexBuffer = mRenderer->CreateVertexBuffer<FVertex>(nullptr, 1024, D3D11_USAGE_DYNAMIC); // 초기 용량 1024개, 필요하면 늘어난다
 	mHighlightIndexBuffer = mRenderer->CreateIndexBuffer(nullptr, 1024, D3D11_USAGE_DYNAMIC); // 초기 용량 1024개, 필요하면 늘어난다
 	
@@ -308,6 +314,100 @@ void FGraphicsManager::Render()
 	{
 		mRenderer->RenderQuad2D(Quad2DInfo);
 	}
+}
+
+void FGraphicsManager::InvalidateHZB()
+{
+	mHZB.Invalidate();
+	for (FHZBReadbackSlot& Slot : mHZBSlots)
+	{
+		Slot.bPending = false;
+	}
+}
+
+void FGraphicsManager::UpdateHZB(const FViewport& Viewport)
+{
+	if (!Viewport.DepthStencil || !Viewport.DepthStencil->DepthSRV)
+	{
+		return;
+	}
+
+	ID3D11DeviceContext* Context = mRenderer->GetDeviceContext();
+
+	// 1) 이전에 복사해 둔 결과 중 GPU가 끝낸 것을 기다리지 않고 읽는다 (가장 최근 것이 최종적으로 남는다)
+	{
+		for (int32 Offset = 1; Offset <= HZBReadbackSlotCount; ++Offset)
+		{
+			// 오래된 슬롯부터 확인: WriteIndex 다음 칸이 가장 오래된 것
+			FHZBReadbackSlot& Slot = mHZBSlots[(mHZBWriteIndex + Offset) % HZBReadbackSlotCount];
+			if (!Slot.bPending)
+			{
+				continue;
+			}
+
+			D3D11_MAPPED_SUBRESOURCE Mapped = {};
+			const HRESULT Hr = Context->Map(Slot.Staging.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &Mapped);
+			if (Hr == DXGI_ERROR_WAS_STILL_DRAWING)
+			{
+				continue;   // 아직 GPU가 끝내지 않음 → 다음 프레임에 다시 시도
+			}
+			if (SUCCEEDED(Hr))
+			{
+				mHZB.Build(static_cast<const float*>(Mapped.pData), int32(mHZBWidth), int32(mHZBHeight),
+					int32(Mapped.RowPitch / sizeof(float)), Slot.ViewProjection);
+				Context->Unmap(Slot.Staging.Get(), 0);
+			}
+			Slot.bPending = false;
+		}
+	}
+
+	// 2) 크기가 바뀌었으면 줄인 깊이 텍스처와 스테이징 텍스처를 다시 만든다
+	const uint32 Width = (std::max)(1u, (Viewport.DepthStencil->Width + 3) / 4);
+	const uint32 Height = (std::max)(1u, (Viewport.DepthStencil->Height + 3) / 4);
+	if (!mHZBTarget || mHZBWidth != Width || mHZBHeight != Height)
+	{
+		mHZBWidth = Width;
+		mHZBHeight = Height;
+		mHZBTarget = mRenderer->CreateRenderTarget2D(Width, Height, DXGI_FORMAT_R32_FLOAT);
+
+		D3D11_TEXTURE2D_DESC StagingDesc = {};
+		StagingDesc.Width = Width;
+		StagingDesc.Height = Height;
+		StagingDesc.MipLevels = 1;
+		StagingDesc.ArraySize = 1;
+		StagingDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		StagingDesc.SampleDesc.Count = 1;
+		StagingDesc.Usage = D3D11_USAGE_STAGING;
+		StagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		for (FHZBReadbackSlot& Slot : mHZBSlots)
+		{
+			Slot.Staging = mRenderer->CreateTexture2D(StagingDesc);
+			Slot.bPending = false;
+		}
+		mHZB.Invalidate();   // 크기가 다른 옛 피라미드는 쓰지 않는다
+	}
+
+	// 3) GPU: 씬 깊이 → 4x4 max 텍스처
+	{
+		mRenderer->BindRenderTarget(mHZBTarget, nullptr, false);   // 깊이 버퍼를 DSV에서 풀어야 SRV로 읽을 수 있다
+		mHZBPipeline->ClearShaderResource();
+		mHZBPipeline->SetShaderResource(0, Viewport.DepthStencil->DepthSRV);
+		mRenderer->Render(mHZBPipeline, 3);
+		mRenderer->ClearAllShaderResources();   // 다음 프레임에 깊이 버퍼를 DSV로 다시 쓰기 전에 SRV 바인딩을 해제
+	}
+
+	// 4) 결과를 스테이징으로 복사해 두고, 몇 프레임 뒤에 CPU가 읽는다
+	FHZBReadbackSlot& WriteSlot = mHZBSlots[mHZBWriteIndex];
+	Context->CopyResource(WriteSlot.Staging.Get(), mHZBTarget->Texture.Get());
+	WriteSlot.ViewProjection = mViewUnifiedProjectionMatrix;
+	WriteSlot.bPending = true;
+	mHZBWriteIndex = (mHZBWriteIndex + 1) % HZBReadbackSlotCount;
+
+	// 이후 그리기(기즈모 등)가 원래 뷰포트에 그려지도록 렌더 타깃을 되돌린다 (지우지 않음)
+	mRenderer->BindRenderTarget(Viewport.RenderTarget, Viewport.DepthStencil, false);
+
+	// 파이프라인과 렌더 타깃을 직접 바꿨으므로 바인딩 캐시를 믿지 않게 한다
+	mRenderer->InvalidateBindingCache();
 }
 
 void FGraphicsManager::Display()

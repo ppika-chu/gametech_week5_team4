@@ -10,6 +10,7 @@
 #include "RenderInfo.h"
 #include "Vector.h"
 #include "ShowFlags.h"
+#include "HZBOcclusion.h"
 
 class FAssetManager;
 struct FViewport;
@@ -128,4 +129,30 @@ private:
 
 	int32 GridGap = 1;
 	bool bGpuTimerActive = false;
+
+	// ---- HZB 오클루전 ----
+public:
+	// 뷰포트의 씬 렌더링이 끝난 뒤 호출: 깊이를 줄여 스테이징으로 복사하고, 준비된 이전 결과를 CPU 피라미드로 만든다.
+	void UpdateHZB(const FViewport& Viewport);
+	// CPU 판정에 쓸 수 있는 HZB가 있으면 반환 (없으면 nullptr → 오클루전 판정 안 함)
+	const FHZB* GetHZB() const { return mHZB.bValid ? &mHZB : nullptr; }
+	// 뷰포트 구성이 바뀌는 등 이전 깊이를 믿을 수 없을 때 호출
+	void InvalidateHZB();
+
+private:
+	struct FHZBReadbackSlot
+	{
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> Staging;
+		FMatrix ViewProjection = FMatrix::Identity;
+		bool bPending = false;
+	};
+	static constexpr int32 HZBReadbackSlotCount = 3;   // GPU 결과를 기다리지 않도록 2~3프레임 전 결과를 읽는다
+
+	TSharedPtr<FRenderPipeline> mHZBPipeline;
+	TSharedPtr<FRenderTarget2D> mHZBTarget;           // 4x4 max로 줄인 깊이 (R32_FLOAT)
+	uint32 mHZBWidth = 0;
+	uint32 mHZBHeight = 0;
+	FHZBReadbackSlot mHZBSlots[HZBReadbackSlotCount];
+	int32 mHZBWriteIndex = 0;
+	FHZB mHZB;
 };
