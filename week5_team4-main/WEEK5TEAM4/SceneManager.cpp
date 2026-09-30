@@ -550,7 +550,8 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PopStyleColor();
 			
 			ImGui::Text("Picking Count: %llu", guiReference.ViewportClient->GetPickAttemptCount());
-			ImGui::Text("Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
+			ImGui::Text("Last Ray Test Count: %llu", guiReference.ViewportClient->GetLastPickTestCount());
+			ImGui::Text("Accumulated Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
 			ImGui::Text("Last Picking Time: %.2f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
 			
@@ -797,12 +798,12 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			}
 		}
 
-		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 5.0f, 150.0f);
+		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 0.0f, 150.0f);
 
 		if (ImGui::Button("All on"))
 		{
 			GCullingMode = ECullingMode::BVH;
-			GPickingMode = EPickingMode::BVHFrustum;
+			GPickingMode = EPickingMode::BVH;
 			for (bool& b : GOptEnabled) { b = true; }
 		}
 		ImGui::SameLine();
