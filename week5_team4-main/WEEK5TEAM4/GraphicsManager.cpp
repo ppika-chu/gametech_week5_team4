@@ -9,6 +9,7 @@
 #include "UTextComponent.h"
 #include "FEditorViewportClient.h"
 #include "OptimizationFlags.h"
+#include "FScopeCycleCounter.h"
 #include <algorithm>
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
@@ -208,6 +209,7 @@ void FGraphicsManager::Render()
 
 	if (IsOptEnabled(EOptFlag::DrawCallSorting))
 	{
+		SCOPE_CYCLE_COUNTER("Sort RenderInfos");
 		// 정렬 키를 미리 한 번씩만 계산한다. 비교자 안에서 계산하면 N log N 배로 곱해진다.
 		for (FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 		{
@@ -238,6 +240,8 @@ void FGraphicsManager::Render()
 	}
 
 
+	{
+	SCOPE_CYCLE_COUNTER("Mesh Draw Submit");
 	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 	{
 		if (RenderInfo.Texture)
@@ -265,6 +269,7 @@ void FGraphicsManager::Render()
 			mLastBoundTexture = nullptr;
 			mRenderer->RenderPrimitiveIndexed(RenderInfo);
 		}
+	}
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())
@@ -307,6 +312,8 @@ void FGraphicsManager::Render()
 
 void FGraphicsManager::Display()
 {
+	// Present가 길면 CPU가 GPU/드라이버를 기다리고 있다는 뜻
+	SCOPE_CYCLE_COUNTER("Present");
 	mRenderer->SwapBuffer();
 }
 
