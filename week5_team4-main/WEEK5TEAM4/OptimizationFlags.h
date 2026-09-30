@@ -2,7 +2,7 @@
 #include "Core.h"
 
 // LOD 전환 거리. LOD1만 슬라이더로 조정하고, LOD2는 그 값에 비례해서 살짝 더 멀리 잡는다.
-inline float GLOD1DistanceRatio = 50.0f;
+inline float GLOD1DistanceRatio = 0.0f;
 inline constexpr float GLOD2DistanceMultiplier = 1.5f;   
 inline float GetLOD2DistanceRatio() { return GLOD1DistanceRatio * GLOD2DistanceMultiplier; }
 

@@ -13,6 +13,10 @@
 #include "LOD.h"
 #include "FMeshBVH.h"
 
+#include <unordered_map>
+#include <string_view>
+#include <cstring>
+
 namespace
 {
 void CalculateNormals(FStaticMeshBuildData& MeshData)
@@ -89,6 +93,54 @@ FStaticMeshBuildData BuildFromVertices(const FVertex* InVertices, uint32 InVerte
 	CalculateNormals(BuildData);
 	return BuildData;
 }
+
+// 빌더가 삼각형 꼭짓점마다 정점을 새로 만들어서(정점 공유 0) 로드 시점에 한 번 합친다.
+// 속성(위치/노말/색/UV)이 완전히 같은 정점만 합치므로 렌더링 결과는 바뀌지 않는다.
+static_assert(sizeof(FVertex) == 48, "FVertex에 패딩이 생기면 바이트 비교 용접이 깨진다");
+
+struct FVertexBytesHash
+{
+	size_t operator()(const FVertex& V) const
+	{
+		return std::hash<std::string_view>{}(std::string_view(reinterpret_cast<const char*>(&V), sizeof(FVertex)));
+	}
+};
+
+struct FVertexBytesEqual
+{
+	bool operator()(const FVertex& A, const FVertex& B) const
+	{
+		return std::memcmp(&A, &B, sizeof(FVertex)) == 0;
+	}
+};
+
+void WeldVertices(TArray<FVertex>& Vertices, TArray<uint32>& Indices)
+{
+	std::unordered_map<FVertex, uint32, FVertexBytesHash, FVertexBytesEqual> Unique;
+	Unique.reserve(Vertices.Num());
+
+	TArray<FVertex> NewVertices;
+	NewVertices.Reserve(Vertices.Num());
+
+	TArray<uint32> Remap;
+	Remap.SetNum(Vertices.Num());
+
+	for (int32 i = 0; i < Vertices.Num(); ++i)
+	{
+		auto [It, bInserted] = Unique.try_emplace(Vertices[i], static_cast<uint32>(NewVertices.Num()));
+		if (bInserted)
+		{
+			NewVertices.Add(Vertices[i]);
+		}
+		Remap[i] = It->second;
+	}
+
+	for (uint32& Index : Indices)
+	{
+		Index = Remap[Index];
+	}
+	Vertices = std::move(NewVertices);
+}
 }
 
 TSharedPtr<FArchive> FFileAssetSource::CreateArchive()
@@ -114,28 +166,32 @@ FStaticMeshAsset::FStaticMeshAsset(const FGuid& InAssetID, const FName& InAssetN
 	, Indices(InBuildData.Indices)
 	, Sections(InBuildData.Sections)
 {
-	for (const FVertex& Source : InBuildData.Vertices)
+	// 삼각형 수프 상태면 LOD 단순화가 삼각형 삭제로 변질되므로 먼저 정점을 합친다.
+	// 이후 GPU 버퍼/BVH/LOD는 전부 용접된 멤버(Vertices, Indices)로 만든다.
+	WeldVertices(Vertices, Indices);
+
+	for (const FVertex& Source : Vertices)
 	{
 		BoundingBox.ExpandToInclude(Source.Pos);
 	}
-	
-	VertexBuffer = InRenderer.CreateVertexBuffer(InBuildData.Vertices.Data(), static_cast<uint32>(InBuildData.Vertices.Num()));
-	IndexBuffer = InRenderer.CreateIndexBuffer(InBuildData.Indices.Data(), static_cast<uint32>(InBuildData.Indices.Num()));
+
+	VertexBuffer = InRenderer.CreateVertexBuffer(Vertices.Data(), static_cast<uint32>(Vertices.Num()));
+	IndexBuffer = InRenderer.CreateIndexBuffer(Indices.Data(), static_cast<uint32>(Indices.Num()));
 	
 	MeshBVH.Build(Vertices, Indices);
 	
 	// 삼각형 수가 200 보다 적으면 lod pass
-	constexpr int32 MinTriCountForLOD = 200;
+	constexpr int32 MinTriCountForLOD = 100;
 
 	if (!Indices.IsEmpty() && !Sections.IsEmpty() && static_cast<int32>(Indices.Num() / 3) >= MinTriCountForLOD)
 	{
 		LOD LodBuilder;
 
 		// LOD 1
-		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.5f, InRenderer));
+		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.4f, InRenderer));
 		
 		// LOD 2
-		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.25f, InRenderer));
+		LODs.Add(LodBuilder.BuildQEMLOD(Vertices, Indices, Sections, 0.2f, InRenderer));
 	}
 
 
