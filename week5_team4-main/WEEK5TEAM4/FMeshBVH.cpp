@@ -51,17 +51,32 @@ bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, floa
     const FRaySIMD LocalRay(FRay(LocalOrigin, LocalDir));
     bool bHit = false;
 
-    int32 Stack[MaxStackDepth];
-    int StackSize = 0;
-    Stack[StackSize++] = RootIndex;
+    // 자식을 넣을 때 구한 진입 거리(Enter)를 같이 넣어서, 꺼낼 때 같은 박스를 다시 검사하지 않는다.
+    struct FStackEntry
+    {
+        int32 NodeIndex;
+        float Enter;
+    };
+
+    // 루트만 여기서 한 번 검사한다. 나머지는 부모가 넣을 때 검사한다.
+    float RootEnter;
+    if (!RayIntersectsAABB(LocalRay, InOutMaxT, Nodes[RootIndex].Bounds, RootEnter)) return false;
+
+    // 균형 트리라 깊이가 log2(삼각형 수 / 4) 정도이고, 맞은 자식만 넣으므로 64칸이면 충분하다.
+    FStackEntry Stack[MaxStackDepth];
+    int32 StackSize = 0;
+    Stack[StackSize++] = { RootIndex, RootEnter };
 
     while (StackSize > 0)
     {
-        const int32 CurrentIndex = Stack[--StackSize];
-        const FMeshBVHNode& Node = Nodes[CurrentIndex];
+        const FStackEntry Entry = Stack[--StackSize];
 
-        float Enter;
-        if (!RayIntersectsAABB(LocalRay, InOutMaxT, Node.Bounds, Enter)) continue;
+        // 넣은 뒤에 더 가까운 삼각형을 찾았으면(InOutMaxT 감소) 이 노드는 그보다 뒤라서 볼 필요가 없다.
+        // 넣을 때 박스 자체는 통과했으므로, 달라질 수 있는 조건은 이것뿐이다.
+        if (Entry.Enter > InOutMaxT) continue;
+
+        const FMeshBVHNode& Node = Nodes[Entry.NodeIndex];
+
         if (Node.Left < 0)
         {
             for (int32 i = 0; i < Node.TriCount; ++i)
@@ -91,15 +106,19 @@ bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, floa
         }
         else
         {
-            const FVector LeftCenter = (Nodes[Node.Left].Bounds.Min + Nodes[Node.Left].Bounds.Max) * 0.5f;
-            const FVector RightCenter = (Nodes[Node.Right].Bounds.Min + Nodes[Node.Right].Bounds.Max) * 0.5f;
+            // 자식 박스에 레이가 들어가는 거리를 구한다 (InOutMaxT보다 멀면 miss)
+            float LeftEnter, RightEnter;
+            const bool bHitLeft  = RayIntersectsAABB(LocalRay, InOutMaxT, Nodes[Node.Left].Bounds,  LeftEnter);
+            const bool bHitRight = RayIntersectsAABB(LocalRay, InOutMaxT, Nodes[Node.Right].Bounds, RightEnter);
 
-            const float LeftDistSq = FVector::LengthSquared(LeftCenter, LocalOrigin);
-            const float RightDistSq = FVector::LengthSquared(RightCenter, LocalOrigin);
-
-            // 가까운 쪽을 나중에 push
-            if (LeftDistSq < RightDistSq) { Stack[StackSize++] = Node.Right; Stack[StackSize++] = Node.Left; }
-            else                          { Stack[StackSize++] = Node.Left;  Stack[StackSize++] = Node.Right; }
+            // 맞은 자식만 넣는다. 레이가 먼저 들어가는 쪽을 나중에 넣어서 먼저 꺼내지게 한다.
+            if (bHitLeft && bHitRight)
+            {
+                if (LeftEnter < RightEnter) { Stack[StackSize++] = { Node.Right, RightEnter }; Stack[StackSize++] = { Node.Left, LeftEnter }; }
+                else                        { Stack[StackSize++] = { Node.Left, LeftEnter };   Stack[StackSize++] = { Node.Right, RightEnter }; }
+            }
+            else if (bHitLeft)  { Stack[StackSize++] = { Node.Left, LeftEnter }; }
+            else if (bHitRight) { Stack[StackSize++] = { Node.Right, RightEnter }; }
         }
     }
     return bHit;

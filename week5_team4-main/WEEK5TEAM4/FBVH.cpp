@@ -207,7 +207,6 @@ void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimi
         }
     }
 }
-
 // Picking 용 (Ray와 가장 가까운 Component 반환)
 UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const
 {
@@ -217,18 +216,32 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
     float NearestT = Ray.Length;
     const FRaySIMD RaySIMD(Ray.ToRay());   // 피킹 한 번에 나눗셈 3번으로 끝
 
+    // 자식을 넣을 때 이미 구한 진입 거리(Enter)를 같이 넣어서,
+    // 꺼낼 때 같은 박스를 다시 검사하지 않는다.
+    struct FPickStackEntry
+    {
+        int32 NodeIndex;
+        float Enter;
+    };
 
-    TArray<int32> Stack;
-    Stack.Add(RootIndex);
+    // 루트만 여기서 한 번 검사한다. 나머지는 부모가 넣을 때 검사한다.
+    float RootEnter;
+    if (!RayIntersectsAABB(RaySIMD, NearestT, Nodes[RootIndex].Bounds, RootEnter)) return nullptr;
+
+    TArray<FPickStackEntry> Stack;
+    Stack.Add({ RootIndex, RootEnter });
 
     while (Stack.Num() > 0)
     {
-        const int32 CurrentIndex = Stack.Last();
+        const FPickStackEntry Entry = Stack.Last();
         Stack.RemoveLast();
-        const FNode& CurrentNode = Nodes[CurrentIndex];
-        float Enter;
 
-        if (!RayIntersectsAABB(RaySIMD, NearestT, CurrentNode.Bounds, Enter)) continue;
+        // 넣은 뒤에 더 가까운 물체를 찾았으면(NearestT 감소) 이 노드는 그보다 뒤에 있어서 볼 필요가 없다.
+        // 넣을 때 박스 자체는 통과했으므로, 달라질 수 있는 조건은 이것뿐이다.
+        if (Entry.Enter > NearestT) continue;
+
+        const FNode& CurrentNode = Nodes[Entry.NodeIndex];
+
         if (CurrentNode.Left < 0)
         {
             for (UPrimitiveComponent* Item : CurrentNode.Items)
@@ -251,7 +264,6 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
                     NearestT = HitT;
                     NearestComponent = Item;
                 }
-                
             }
         }
         else
@@ -261,17 +273,19 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
             const bool bHitLeft = RayIntersectsAABB(RaySIMD, NearestT, Nodes[CurrentNode.Left].Bounds, LeftEnter);
             const bool bHitRight = RayIntersectsAABB(RaySIMD, NearestT, Nodes[CurrentNode.Right].Bounds, RightEnter);
 
+            // 가까운 쪽을 나중에 넣어서 먼저 꺼내지게 한다
             if (bHitLeft && bHitRight)
             {
-                if (LeftEnter < RightEnter) { Stack.Add(CurrentNode.Right); Stack.Add(CurrentNode.Left); }
-                else { Stack.Add(CurrentNode.Left);  Stack.Add(CurrentNode.Right); }
+                if (LeftEnter < RightEnter) { Stack.Add({ CurrentNode.Right, RightEnter }); Stack.Add({ CurrentNode.Left, LeftEnter }); }
+                else                        { Stack.Add({ CurrentNode.Left, LeftEnter });   Stack.Add({ CurrentNode.Right, RightEnter }); }
             }
-            else if (bHitLeft) { Stack.Add(CurrentNode.Left); }
-            else if (bHitRight) { Stack.Add(CurrentNode.Right); }
+            else if (bHitLeft)  { Stack.Add({ CurrentNode.Left, LeftEnter }); }
+            else if (bHitRight) { Stack.Add({ CurrentNode.Right, RightEnter }); }
         }
     }
     return NearestComponent;
 }
+
 
 // AABB 다시 계산
 void FBVH::RecomputeNodeBounds(int32 NodeIndex)
