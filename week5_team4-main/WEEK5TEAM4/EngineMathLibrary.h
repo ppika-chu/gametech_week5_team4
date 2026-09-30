@@ -222,7 +222,7 @@ inline bool RayIntersectsTriangle(const FVector& Origin, const FVector& Dir, con
 	// OutU, OutV 정확환 클릭지점을 확인하려면 필요
 }
 
-inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB)
+inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB, float& OutEnter)
 {
 	if (Distance < 0.f)	return false;
 
@@ -242,7 +242,8 @@ inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB
 
 	float Enter = (std::max)({0.f, MinArr[0], MinArr[1], MinArr[2]});
 	float Exit = (std::min)({Distance, MaxArr[0], MaxArr[1], MaxArr[2]});
-	
+	OutEnter = Enter;
+
 	return Enter <= Exit;
 }
 
@@ -274,6 +275,41 @@ struct FFrustum
 		F.Planes[5] = Col3 - Col2;
 
 		return F;
+	}
+
+	enum class EFrustumTestResult { Outside, Inside, Intersect };
+
+	EFrustumTestResult ClassifyAABB(const FAABB& AABB, uint32& PlaneMask) const
+	{
+		FVector Center;
+		FVector Extent;
+
+		Center = (AABB.Max + AABB.Min) * 0.5f;
+		Extent = (AABB.Max - AABB.Min) * 0.5f;
+
+		for (int32 i = 0; i < 6; i++)
+		{
+			if ((PlaneMask & (1u << i)) == 0)
+			{
+				continue;
+			}
+
+			const FVector4& Plane = Planes[i];
+
+			float Distance = Plane.x * Center.x + Plane.y * Center.y + Plane.z * Center.z + Plane.w;
+			float ProjectedExtent = FMath::Abs(Plane.x) * Extent.x
+				+ FMath::Abs(Plane.y) * Extent.y
+				+ FMath::Abs(Plane.z) * Extent.z;
+
+			if (Distance < -ProjectedExtent)
+				return (EFrustumTestResult::Outside);
+			else if (Distance > ProjectedExtent)
+				PlaneMask &= ~(1u << i);
+		}
+		if (PlaneMask == 0)
+			return (EFrustumTestResult::Inside);
+
+		return (EFrustumTestResult::Intersect);
 	}
 
 	inline bool Intersects(const FAABB& AABB) const

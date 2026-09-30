@@ -21,12 +21,13 @@ enum class ERenderBlendMode
 
 struct FRenderInfo
 {
-	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
+	// RenderInfos는 한 프레임짜리 목록이고, 소유는 에셋과 컴포넌트가 한다
+	ID3D11Buffer* VertexBuffer = nullptr;
 	uint32 VertexCount = 0;
-	Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
+	ID3D11Buffer* IndexBuffer = nullptr;
 	uint32 StartIndex = 0;
 	uint32 IndexCount = 0;
-	TSharedPtr<FTexture2DAsset> Texture;
+	FTexture2DAsset* Texture = nullptr;
 	FVector2 UVOffset = { 0.f, 0.f };
 	FMatrix Model;
 	float ViewSpaceZ = 0.f;

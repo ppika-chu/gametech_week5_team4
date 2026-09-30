@@ -43,7 +43,10 @@ public:
 	}
 
 	// 어떤 Material을 쓰게 할 것인지 Setter
-	void SetMaterial(int32 index, const TSharedPtr<FMaterialAsset>& InMaterial) { mMaterialAssets[index] = InMaterial; }
+	void SetMaterial(int32 index, const TSharedPtr<FMaterialAsset>& InMaterial)
+	{
+		mMaterialAssets[index] = InMaterial; RebuildSectionTextures();
+	}
 
 	// 어떤 Material을 쓰고 있는지 Getter
 	const TSharedPtr<FMaterialAsset>& GetMaterial(int32 index) const { return mMaterialAssets[index]; }
@@ -61,9 +64,11 @@ public:
 	UStaticMesh* StaticMesh = nullptr;
 
 private:
+	void RebuildSectionTextures();
 	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
 	TSharedPtr<FStaticMeshAsset> mMeshAsset;
 	TArray<TSharedPtr<FMaterialAsset>> mMaterialAssets;
 	TSharedPtr<FTexture2DAsset> mTextureAsset;
 	TArray<FVector2> mUVOffsets;
+	TArray<TSharedPtr<FTexture2DAsset>> mSectionTextures;
 };
