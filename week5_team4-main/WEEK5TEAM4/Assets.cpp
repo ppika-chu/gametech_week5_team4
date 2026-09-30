@@ -440,8 +440,7 @@ TSharedPtr<FAsset> FMaterialAssetLoader::LoadAsset(const FGuid& AssetID, const F
 	Ar << NormalTexture;
 	#endif
 
-	// TODO: 머티리얼 살아있는 동안 텍스처 에셋이 핫리로드/교체되는 기능이 생기면
-	// 이 캐시를 무효화하는 훅이 필요함 (현재는 그런 기능 없음)
+	// TODO: 머티리얼 살아있는 동안 텍스처 에셋이 핫리로드/ 없음)
 	return MakeShared<FMaterialAsset>(AssetID,
 									  AssetName,
 									  Payload.AmbientColor,
