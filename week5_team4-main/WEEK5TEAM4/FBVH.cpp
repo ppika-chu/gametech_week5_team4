@@ -2,6 +2,7 @@
 #include "EngineMathLibrary.h"
 #include "RayCast.h"
 #include "TMap.h"
+#include "HZBOcclusion.h"
 #include <functional>
 
 void FBVH::Clear()
@@ -134,6 +135,7 @@ int32 FBVH::BuildRecursive(TArray<FEntry>& Entries, int32 Begin, int32 End, int3
         return NodeIndex;
     }
 
+
     // 가장 긴 축 가져오기
     const int32 Mid = PartitionByLongestAxis(Entries, Begin, End);
 
@@ -161,7 +163,7 @@ namespace {
 }
 
 // Frustum culling 용
-void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor) const
+void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor, const FHZB* HZB) const
 {
     if (RootIndex < 0) return;
 
@@ -183,18 +185,31 @@ void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimi
             continue;   // 서브트리 전체 버림
         }
 
+        // 오클루전: 노드 박스 전체가 깊이 피라미드 뒤에 있으면 서브트리 전체 버림
+        if (HZB && HZB->IsOccluded(CurrentNode.Bounds))
+        {
+            continue;
+        }
+
         if (CurrentNode.Left < 0)   // 리프
         {
             for (UPrimitiveComponent* Item : CurrentNode.Items)
             {
+                const FAABB ItemBounds = Item->GetBoundingBox();
+
                 // 노드가 Inside면 아이템도 안쪽이 확실하다. 걸쳐 있을 때만 남은 평면으로 판정
                 if (Mask != 0)
                 {
                     uint32 ItemMask = Mask;
-                    if (Frustum.ClassifyAABB(Item->GetBoundingBox(), ItemMask) == FFrustum::EFrustumTestResult::Outside)
+                    if (Frustum.ClassifyAABB(ItemBounds, ItemMask) == FFrustum::EFrustumTestResult::Outside)
                     {
                         continue;
                     }
+                }
+
+                if (HZB && HZB->IsOccluded(ItemBounds))
+                {
+                    continue;
                 }
                 Visitor(Item);
             }

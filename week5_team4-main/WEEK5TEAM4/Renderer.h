@@ -321,7 +321,8 @@ struct FDepthStencil
 {
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilView> DSV;
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;       // 스텐실 읽기용 (아웃라인)
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> DepthSRV;  // 깊이 읽기용 (HZB)
 	UINT Width;
 	UINT Height;
 };

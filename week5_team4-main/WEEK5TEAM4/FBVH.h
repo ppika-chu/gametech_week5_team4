@@ -14,7 +14,9 @@ public:
 
     int32 GetComponentNum() { return ComponentToLeaf.Num(); }
     // Frustum culling 용
-    void QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor) const;
+    // HZB를 넘기면 깊이 피라미드 뒤에 가려진 노드(서브트리)와 아이템도 건너뛴다.
+    void QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimitiveComponent*)>& Visitor,
+        const struct FHZB* HZB = nullptr) const;
 
     // Picking 용 (Ray와 가장 가까운 Component 반환)
     UPrimitiveComponent* QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const;

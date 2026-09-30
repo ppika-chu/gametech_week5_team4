@@ -4,6 +4,7 @@
 #include "RenderInfo.h"
 #include "ShowFlags.h"
 #include "OptimizationFlags.h"
+#include "HZBOcclusion.h"
 #include "Actor.h"
 #include "JsonUtil.h"
 #include "EngineMathLibrary.h"
@@ -109,6 +110,14 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
     // Linear 모드에서만 여기서 컬링한다. BVH 모드는 QueryFrustum에서 이미 아이템 단위까지 걸러서 넘겨준다.
     if (GCullingMode == ECullingMode::Linear
         && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+    {
+        ++RenderCollector.CulledObjectCount;
+        return;
+    }
+
+    // Occlusion Culling (Linear 모드 전용). BVH 모드는 QueryFrustum에서 노드 단위로 이미 판정한다.
+    if (GCullingMode == ECullingMode::Linear
+        && RenderCollector.HZB && RenderCollector.HZB->IsOccluded(WorldBounds))
     {
         ++RenderCollector.CulledObjectCount;
         return;

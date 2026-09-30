@@ -35,6 +35,7 @@ enum class EOptFlag : uint8
     TransformCache,
     DrawCallSorting,
     MeshBVHPicking,
+    HZBOcclusion,
     Count
 };
 
@@ -45,6 +46,7 @@ inline bool GOptEnabled[static_cast<uint8>(EOptFlag::Count)] =
     true,   // TransformCache
     true,   // DrawCallSorting
     true,   // MeshBVHPicking
+    true,   // HZBOcclusion
 };
 
 inline bool IsOptEnabled(EOptFlag Flag)
@@ -65,4 +67,5 @@ inline constexpr FOptFlagInfo GOptFlagInfos[] =
     { EOptFlag::TransformCache,  "Transform Cache",   "월드 행렬을 변경될 때만 재계산" },
     { EOptFlag::DrawCallSorting, "Draw Call Sorting", "Early-Z 정렬 + 텍스처/메시 묶어 상태 캐싱" },
     { EOptFlag::MeshBVHPicking,  "Mesh BVH Picking",  "2차 피킹 검사(삼각형)도 BVH로 수행" },
+    { EOptFlag::HZBOcclusion,    "HZB Occlusion",     "이전 프레임 깊이 피라미드로 가려진 오브젝트를 컬링 (단일 뷰포트에서만, 1~2프레임 지연)" },
 };

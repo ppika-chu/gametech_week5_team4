@@ -371,6 +371,14 @@ TSharedPtr<FDepthStencil> URenderer::CreateDepthStencil(uint32 Width, uint32 Hei
 	SRVDesc.Texture2D.MipLevels = 1;
 	Device->CreateShaderResourceView(DepthStencil->Texture.Get(), &SRVDesc, DepthStencil->SRV.GetAddressOf());
 
+	// HZB 생성용: 같은 텍스처의 깊이 부분(24비트)을 float로 읽는 뷰
+	D3D11_SHADER_RESOURCE_VIEW_DESC DepthSRVDesc{};
+	DepthSRVDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	DepthSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	DepthSRVDesc.Texture2D.MostDetailedMip = 0;
+	DepthSRVDesc.Texture2D.MipLevels = 1;
+	Device->CreateShaderResourceView(DepthStencil->Texture.Get(), &DepthSRVDesc, DepthStencil->DepthSRV.GetAddressOf());
+
 	DepthStencil->Width = Width;
 	DepthStencil->Height = Height;
 

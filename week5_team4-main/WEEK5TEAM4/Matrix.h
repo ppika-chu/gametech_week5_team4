@@ -6,6 +6,7 @@
 #include "enum.h"
 #include <utility>
 #include <xmmintrin.h>
+#include <DirectXMath.h>
 
 struct FMatrix { 
 	float M[4][4];
@@ -258,7 +259,7 @@ struct FMatrix {
 		return result;
 	}
 
-	static FMatrix Rotate(const FRotator r)
+/*	static FMatrix Rotate(const FRotator r)
 	{
 		//Pitch, Yaw, Roll의 각각 cossin 구하기
 		FMatrix Matrix = FMatrix::Identity;
@@ -269,6 +270,38 @@ struct FMatrix {
 		FMath::sincos<float>(sinP, cosP, r.Pitch * PI / 180);
 		FMath::sincos<float>(sinY, cosY, r.Yaw * PI / 180);
 		FMath::sincos<float>(sinR, cosR, r.Roll * PI / 180);
+
+		Matrix.M[0][0] = cosP * cosY;
+		Matrix.M[0][1] = cosP * sinY;
+		Matrix.M[0][2] = sinP;
+		Matrix.M[1][0] = sinR * sinP * cosY - cosR * sinY;
+		Matrix.M[1][1] = sinR * sinP * sinY + cosR * cosY;
+		Matrix.M[1][2] = -sinR * cosP;
+		Matrix.M[2][0] = -(cosR * sinP * cosY + sinR * sinY);
+		Matrix.M[2][1] = sinR * cosY - cosR * sinP * sinY;
+		Matrix.M[2][2] = cosR * cosP;
+
+		return Matrix;
+	}*/
+
+	static FMatrix Rotate(const FRotator r)
+	{
+		//Pitch, Yaw, Roll의 각각 cossin 구하기
+		FMatrix Matrix = FMatrix::Identity;
+
+		const DirectX::XMVECTOR angles = DirectX::XMVectorSet(r.Pitch, r.Yaw, r.Roll, 0.0f);
+
+		const DirectX::XMVECTOR radians = DirectX::XMVectorDivide(DirectX::XMVectorMultiply(angles, DirectX::XMVectorReplicate(PI)), DirectX::XMVectorReplicate(180.0f));
+
+		DirectX::XMVECTOR sins, coss;
+		DirectX::XMVectorSinCos(&sins, &coss, radians);
+
+		DirectX::XMFLOAT4 s, c;
+		DirectX::XMStoreFloat4(&s, sins);
+		DirectX::XMStoreFloat4(&c, coss);
+
+		const float sinP = s.x, sinY = s.y, sinR = s.z;
+		const float cosP = c.x, cosY = c.y, cosR = c.z;
 
 		Matrix.M[0][0] = cosP * cosY;
 		Matrix.M[0][1] = cosP * sinY;
@@ -428,9 +461,7 @@ struct FMatrix {
 			const __m128 Yyzx = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 0, 2, 1));
 			const __m128 Yzxy = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 1, 0, 2));
 
-			return _mm_sub_ps(
-				_mm_mul_ps(Xyzx, Yzxy),
-				_mm_mul_ps(Xzxy, Yyzx));
+			return _mm_sub_ps(_mm_mul_ps(Xyzx, Yzxy),	_mm_mul_ps(Xzxy, Yyzx));
 		};
 
 		__m128 Cofactor0 = Cross(B, C);
@@ -482,7 +513,7 @@ struct FMatrix {
 	// end Struct Matrix
 };
 
-// 행벡터 규약: V * M. 투영 시 동차 좌표 w까지 유지한다.
+/*// 행벡터 규약: V * M. 투영 시 동차 좌표 w까지 유지한다.
 inline FVector4 operator*(const FVector4& V, const FMatrix& M)
 {
 	return FVector4(
@@ -490,6 +521,20 @@ inline FVector4 operator*(const FVector4& V, const FMatrix& M)
 		V.x * M.M[0][1] + V.y * M.M[1][1] + V.z * M.M[2][1] + V.w * M.M[3][1],
 		V.x * M.M[0][2] + V.y * M.M[1][2] + V.z * M.M[2][2] + V.w * M.M[3][2],
 		V.x * M.M[0][3] + V.y * M.M[1][3] + V.z * M.M[2][3] + V.w * M.M[3][3]);
+}*/
+
+// 행벡터 규약: V * M. 투영 시 동차 좌표 w까지 유지한다.
+inline FVector4 operator*(const FVector4& V, const FMatrix& M)
+{
+	__m128 result = _mm_mul_ps(_mm_set1_ps(V.x), _mm_loadu_ps(M.M[0]));
+	result = _mm_add_ps(result, _mm_mul_ps(_mm_set1_ps(V.y), _mm_loadu_ps(M.M[1])));
+	result = _mm_add_ps(result, _mm_mul_ps(_mm_set1_ps(V.z), _mm_loadu_ps(M.M[2])));
+	result = _mm_add_ps(result, _mm_mul_ps(_mm_set1_ps(V.w), _mm_loadu_ps(M.M[3])));
+	
+	FVector4 out;
+	_mm_storeu_ps(out.v, result);
+
+	return out;
 }
 
 inline const FMatrix FMatrix::Identity = {

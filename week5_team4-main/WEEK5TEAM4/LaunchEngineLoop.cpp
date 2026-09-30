@@ -28,6 +28,7 @@
 #include "Serializers.h"
 #include "NativeFileDialog.h"
 #include "EngineMathLibrary.h"
+#include "OptimizationFlags.h"
 #include "FScopeCycleCounter.h"
 
 #if IS_OBJ_VIEWER
@@ -226,6 +227,19 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	
 	mGraphicsManager->GetRenderer()->ResetDrawCallCount();
 	
+	// HZB 오클루전: 이전 프레임 깊이를 쓰므로 "같은 뷰포트"를 연속으로 그릴 때만 의미가 있다.
+	// 4분할에서는 뷰포트마다 깊이가 달라 섞이므로 끄고, 뷰포트 구성이 바뀌면 이전 결과를 버린다.
+	const bool bUseHZB = IsOptEnabled(EOptFlag::HZBOcclusion) && !bIsSplit && GCullingMode != ECullingMode::Off;
+	{
+		static int32 LastHZBViewportKey = -2;
+		const int32 HZBViewportKey = bUseHZB ? ActiveIndex : -1;
+		if (HZBViewportKey != LastHZBViewportKey)
+		{
+			mGraphicsManager->InvalidateHZB();
+			LastHZBViewportKey = HZBViewportKey;
+		}
+	}
+
 	for (int32 i = 0; i < ViewportCount; ++i)
 	{
 		int32 CurrentIndex = bIsSplit ? i : ActiveIndex;
@@ -256,6 +270,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		// Frustum 저장
 		const FFrustum ViewFrustum = FFrustum::FromViewProjection(ViewProjection);
 		RenderCollector.Frustum = &ViewFrustum;
+		RenderCollector.HZB = bUseHZB ? mGraphicsManager->GetHZB() : nullptr;
 
 		mSceneManager->Render(deltaTime, RenderCollector);
 
@@ -329,6 +344,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			mGraphicsManager->Prepare(&CurrentViewport->Client->mCamera, ViewportRect.Width, ViewportRect.Height, *CurrentViewport->Viewport, CurrentViewport->Client->GetViewMode(), CurrentViewport->Client->GetViewportType());
 			mGraphicsManager->RenderHighLight(HighlightedComponents);
 			mGraphicsManager->Render();
+
+			// 씬 깊이로 HZB 생성 (기즈모 깊이가 섞이지 않도록 기즈모보다 먼저). 끝나면 뷰포트 렌더 타깃을 다시 묶는다.
+			if (bUseHZB)
+			{
+				mGraphicsManager->UpdateHZB(*CurrentViewport->Viewport);
+			}
 
 			CurrentViewport->Client->mGizmo.Render(SelectedActor, CurrentViewport->Client->mCamera.Transform.Location, CurrentViewport->Window->Rect, ViewProjection, CurrentViewport->Client->IsOrtho(), CurrentViewport->Client->GetCamera().mOrthoDistance);
 		
