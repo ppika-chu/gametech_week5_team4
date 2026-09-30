@@ -18,6 +18,7 @@
 #include "Circle.h"
 #include "Plane.h"
 #include "ShowFlags.h"
+#include "OptimizationFlags.h"
 
 #include <xmmintrin.h>
 
@@ -114,6 +115,23 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 	const FVector LocalFar = WorldToLocal.TransformPosition(PickingRay.Far);
 	const FVector D = LocalFar - LocalNear;
 
+	// FMeshBVH 있으면 삼각형 검사는 이걸로.
+	if (IsOptEnabled(EOptFlag::MeshBVHPicking))
+	if (const FMeshBVH* BVH = GetMeshBVH())
+	{
+		if (BVH->IsValid())
+		{
+			float T = 1.0f;
+			if (BVH->RayCast(LocalNear, D, T))
+			{
+				OutHitT = T * PickingRay.Length;
+				return true;
+			}
+			return false;
+		}
+	}
+
+	// 없으면 FallBack
 	const __m128 OriginX = _mm_set1_ps(LocalNear.x);
 	const __m128 OriginY = _mm_set1_ps(LocalNear.y);
 	const __m128 OriginZ = _mm_set1_ps(LocalNear.z);

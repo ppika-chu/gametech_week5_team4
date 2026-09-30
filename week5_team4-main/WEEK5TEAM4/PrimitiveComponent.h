@@ -33,6 +33,9 @@ public:
 	virtual const TArray<FVertex>& GetMeshVertices() const;
 	virtual const TArray<uint32>& GetMeshIndices() const;
 
+	// 기본 primitive들은 삼각형 몇 개 없으니까 override 하고 그냥 brute force
+	virtual const FMeshBVH* GetMeshBVH() const { return nullptr; }
+
 	// 광선과 이 컴포넌트의 충돌을 판정한다.
 	// 맞으면 true를 돌려주고 OutHitT에 광선의 매개변수(Near가 0, Far가 1)를 채운다.
 	// 값이 작을수록 카메라에 가까우므로 그대로 비교해서 가장 가까운 대상을 고를 수 있다.

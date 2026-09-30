@@ -36,6 +36,7 @@ enum class EOptFlag : uint8
     LOD = 0,
     TransformCache,
     DrawCallSorting,
+    MeshBVHPicking,
     Count
 };
 
@@ -45,6 +46,7 @@ inline bool GOptEnabled[static_cast<uint8>(EOptFlag::Count)] =
     true,   // LOD
     true,   // TransformCache
     true,   // DrawCallSorting
+    true,   // MeshBVHPicking
 };
 
 inline bool IsOptEnabled(EOptFlag Flag)
@@ -64,4 +66,5 @@ inline constexpr FOptFlagInfo GOptFlagInfos[] =
     { EOptFlag::LOD,             "LOD",               "멀리 있는 오브젝트를 단순화된 메시로 교체" },
     { EOptFlag::TransformCache,  "Transform Cache",   "월드 행렬을 변경될 때만 재계산" },
     { EOptFlag::DrawCallSorting, "Draw Call Sorting", "Early-Z 정렬 + 텍스처/메시 묶어 상태 캐싱" },
+    { EOptFlag::MeshBVHPicking,  "Mesh BVH Picking",  "2차 피킹 검사(삼각형)도 BVH로 수행" },
 };
