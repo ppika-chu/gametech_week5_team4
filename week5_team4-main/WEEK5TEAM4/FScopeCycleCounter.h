@@ -1,7 +1,7 @@
 #pragma once
 
-#include <windows.h>
 #include "Core.h"
+#include "PlatformTime.h"
 #include "FName.h"
 #include "TMap.h"
 #include "TArray.h"
@@ -15,56 +15,6 @@
 
 #define SCOPE_CYCLE_COUNTER(NameLiteral) \
     FScopeCycleCounter ANONYMOUS_VAR(ScopeCounter_)(GET_STAT_ID(NameLiteral))
-
-class FWindowsPlatformTime
-{
-public:
-    inline static double GSecondsPerCycle; // 0
-    inline static bool bInitialized; // false
-
-    inline static void InitTiming() {
-        if (!bInitialized)
-        {
-            bInitialized = true;
-
-            double Frequency = (double)GetFrequency();
-            if (Frequency <= 0.0)
-            {
-                Frequency = 1.0;
-            }
-
-            GSecondsPerCycle = 1.0 / Frequency;
-        }
-    }
-
-    inline static float GetSecondsPerCycle() {
-        if (!bInitialized)
-        {
-            InitTiming();
-        }
-        return (float)GSecondsPerCycle;
-    }
-
-    inline static uint64 GetFrequency() {
-        LARGE_INTEGER Frequency;
-        QueryPerformanceFrequency(&Frequency);
-        return Frequency.QuadPart;
-    }
-
-    inline static double ToMilliseconds(uint64 CycleDiff) {
-        double Ms = static_cast<double>(CycleDiff)
-            * GetSecondsPerCycle()
-            * 1000.0;
-
-        return Ms;
-    }
-
-    inline static uint64 Cycles64() {
-        LARGE_INTEGER CycleCount;
-        QueryPerformanceCounter(&CycleCount);
-        return (uint64)CycleCount.QuadPart;
-    }
-};
 
 struct FStatEntry
 {
@@ -152,7 +102,6 @@ struct TStatId
     FStatEntry* Entry = nullptr;
 };
 
-typedef FWindowsPlatformTime FPlatformTime;
 
 class FScopeCycleCounter
 {

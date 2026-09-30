@@ -103,7 +103,7 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
             }
         }
         
-        constexpr float BoundaryWeight = 400.0f;
+        constexpr float BoundaryWeight = 100.0f;
         for (int t = 0; t < TriCount; ++t)
         {
             uint32 Tri[3] = { Indices[t*3+0], Indices[t*3+1], Indices[t*3+2] };
@@ -181,7 +181,6 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
     // 그 정점 주변 삼각형의 법선이 뒤집히는지 검사.
     auto WouldFlip = [&](uint32 MovingVertex, uint32 OtherVertex, const FVector& NewPos) -> bool
     {
-        constexpr float FlipThreshold = 0.5f;
 
         // 움직일 정점과 인접한 삼각형 순회하기
         for (int32 TriIdx : VertTris[MovingVertex])
@@ -215,7 +214,7 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
             const float Dot = FVector::dot(OldNormal, NewNormal);
             
             // 제곱근 연산은 비싸므로 제곱으로 처리
-            if (Dot < 0.0f || Dot * Dot < 0.04f * OldLenSq * NewLenSq)  return true;
+            if (Dot < 0.0f || Dot * Dot < 0.02f * OldLenSq * NewLenSq)  return true;
         }
         return false;
     };
