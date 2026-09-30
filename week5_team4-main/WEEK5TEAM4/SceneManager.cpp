@@ -38,6 +38,7 @@
 #include "FSceneConverter.h"
 
 #include "OptimizationFlags.h"
+#include "FScopeCycleCounter.h"
 
 FSceneManager::FSceneManager()
 {
@@ -562,7 +563,30 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::Text("GPU call Count: %llu", guiReference.GraphicsManager->GetRenderer()->GetDrawCallCount());
 			ImGui::Text("Drawn Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetDrawnObjCount());
 			ImGui::Text("Culled Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetCulledObjCount());
-			
+
+			// Stats: FScopeCycleCounter로 측정한 구간별 시간 (등록 순서대로)
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("Stats");
+			ImGui::PopStyleColor();
+			for (const FStatEntry* Entry : FStatRegistry::Get().GetOrderedEntries())
+			{
+				const FString EntryName = Entry->Name.ToString();
+				// 연속 2프레임 이상 실행된 구간만 매 프레임 구간으로 본다.
+				// (피킹처럼 가끔 실행되는 구간이 실행 직후 한 프레임만 형식이 바뀌는 것을 막는다)
+				if (Entry->ActiveFrameStreak >= 2)
+				{
+					// 매 프레임 실행되는 구간: 직전 프레임에 쓴 시간
+					ImGui::Text("%s: %.2f ms/frame", EntryName.CStr(), FPlatformTime::ToMilliseconds(Entry->LastFrameCycles));
+				}
+				else if (Entry->CallCount > 0)
+				{
+					// 가끔 실행되는 구간(피킹 등): 마지막 1회와 평균
+					const double AvgMs = FPlatformTime::ToMilliseconds(Entry->TotalCycles) / static_cast<double>(Entry->CallCount);
+					ImGui::Text("%s: last %.3f ms | avg %.3f ms (%llu calls)", EntryName.CStr(),
+						FPlatformTime::ToMilliseconds(Entry->LastCycles), AvgMs, Entry->CallCount);
+				}
+			}
+
 			ImGui::PopStyleColor();
 			ImGui::PopFont();
 			ImGui::End();

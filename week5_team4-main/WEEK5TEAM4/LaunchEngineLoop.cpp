@@ -28,6 +28,7 @@
 #include "Serializers.h"
 #include "NativeFileDialog.h"
 #include "EngineMathLibrary.h"
+#include "FScopeCycleCounter.h"
 
 #if IS_OBJ_VIEWER
 #include "FObjViewer.h"
@@ -387,6 +388,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	mGraphicsManager->Display();
 	
 	FrameTimer->EndFrame();
+	FStatRegistry::Get().EndFrame();
 
 	GInTick = false;
 }

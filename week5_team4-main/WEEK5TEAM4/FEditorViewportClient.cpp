@@ -20,6 +20,7 @@
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
 #include "FBVH.h"
+#include "FScopeCycleCounter.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -87,13 +88,9 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 		return nullptr;
 	}
 
-	// Picking 횟수 +1
-	++PickAttemptCount;
-	// Picking time 기록 start
-	const auto StartTime = std::chrono::high_resolution_clock::now();
 	
-	// 가장 최근 picking의 test count를 위해 누적값 기억.
-	const uint64 TestCountBefore = PickTestCount;
+	// Picking time 기록 start
+	//const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(ViewportRect.X);
 	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(ViewportRect.Y);
@@ -108,6 +105,11 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	float NearestT = FLT_MAX;
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
+
+	//  퍼포먼스 측정용 카운터 시작
+	FScopeCycleCounter PickCounter(GET_STAT_ID("Mouse Picking"));
+	// Picking 횟수 +1
+	++PickAttemptCount;
 
 	if (GPickingMode != EPickingMode::BruteForce)
 	{
@@ -144,16 +146,18 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 		}
 	}
 
-	const auto EndTime = std::chrono::high_resolution_clock::now();
+	//const auto EndTime = std::chrono::high_resolution_clock::now();
 
-	// 이번 Picking에 소요된 시간(ms)
-	PickLastTimeMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
+	//// 이번 Picking에 소요된 시간(ms)
+	//PickLastTimeMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
 
-	// 누적 시간 ( End - Start ) 기록
-	PickAccumulatedTimeMs += std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
-	
-	// 가장 최근 picking의 충돌 검사 횟수 (현재 값 - 누적값)
-	PickLastTestCount = PickTestCount - TestCountBefore;
+	//// 누적 시간 ( End - Start ) 기록
+	//PickAccumulatedTimeMs += std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
+
+	// 퍼포먼스 측정 종료 및 시간 누적 (Finish는 사이클을 반환하므로 ms로 변환)
+	PickLastTimeMs = FPlatformTime::ToMilliseconds(PickCounter.Finish());
+	PickAccumulatedTimeMs += PickLastTimeMs;
+
 	return NearestActor;
 }
 
