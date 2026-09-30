@@ -598,7 +598,7 @@ void URenderer::RenderPrimitiveIndexed(const FRenderInfo& RenderInfo, uint32 Ste
 	RenderPrimitiveIndexed(PrimitivePipeline, RenderInfo, StencilRef);
 }
 
-void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef) const
+/*void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeline, const FRenderInfo& RenderInfo, uint32 StencilRef) const
 {
 	BindPipeline(Pipeline, StencilRef);
 
@@ -610,6 +610,53 @@ void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeli
 		LastVertexBuffer = CurrentVB;
 		LastVertexStride = Pipeline->Stride;
 	}	
+
+	if (RenderInfo.IndexBuffer)
+	{
+		ID3D11Buffer* CurrentIB = RenderInfo.IndexBuffer;
+		if (LastIndexBuffer != CurrentIB)
+		{
+			DeviceContext->IASetIndexBuffer(RenderInfo.IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+			LastIndexBuffer = CurrentIB;
+		}
+		DeviceContext->DrawIndexed(RenderInfo.IndexCount, RenderInfo.StartIndex, 0);
+	}
+	else
+	{
+		DeviceContext->Draw(RenderInfo.VertexCount, 0);
+	}
+	++DrawCallCount;
+}*/
+
+void URenderer::RenderPrimitiveIndexed(
+	const TSharedPtr<FRenderPipeline>& Pipeline,
+	const FRenderInfo& RenderInfo,
+	uint32 StencilRef,
+	ID3D11DeviceContext1* Context1,
+	ID3D11Buffer* ObjectBuffer,
+	UINT FirstConstant) const
+{
+	BindPipeline(Pipeline, StencilRef);
+
+	// 텍스처 메시의 객체별 상수 데이터가 큰 버퍼에 있을 때만 범위를 선택한다.
+	// BindPipeline 뒤에 있어야 파이프라인 변경 시 b0가 덮이는 문제를 피한다.
+	if (Context1 && ObjectBuffer)
+	{
+		constexpr UINT WindowConstants = 16; // 16 × 16바이트 = 256바이트
+		Context1->VSSetConstantBuffers1(
+			0, 1, &ObjectBuffer, &FirstConstant, &WindowConstants);
+		Context1->PSSetConstantBuffers1(
+			0, 1, &ObjectBuffer, &FirstConstant, &WindowConstants);
+	}
+
+	ID3D11Buffer* CurrentVB = RenderInfo.VertexBuffer;
+	if (LastVertexBuffer != CurrentVB || LastVertexStride != Pipeline->Stride)
+	{
+		UINT Offset = 0;
+		DeviceContext->IASetVertexBuffers(0, 1, &RenderInfo.VertexBuffer, &Pipeline->Stride, &Offset);
+		LastVertexBuffer = CurrentVB;
+		LastVertexStride = Pipeline->Stride;
+	}
 
 	if (RenderInfo.IndexBuffer)
 	{

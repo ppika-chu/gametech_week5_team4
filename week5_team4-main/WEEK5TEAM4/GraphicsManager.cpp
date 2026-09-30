@@ -10,6 +10,7 @@
 #include "FEditorViewportClient.h"
 #include "OptimizationFlags.h"
 #include <algorithm>
+#include <cstring>
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
@@ -20,6 +21,15 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 {
 	mRenderer = new URenderer;
 	mRenderer->Create(hWindow);
+
+	mRenderer->GetDeviceContext()->QueryInterface(IID_PPV_ARGS(mObjectContext1.GetAddressOf()));
+
+	D3D11_FEATURE_DATA_D3D11_OPTIONS options{};
+	if (!mObjectContext1 ||
+		FAILED(mRenderer->GetDevice()->CheckFeatureSupport(	D3D11_FEATURE_D3D11_OPTIONS, &options, sizeof(options))) ||	!options.ConstantBufferOffsetting)
+	{
+		mObjectContext1.Reset(); // 기존 Map 경로 사용
+	}
 
 	mAspect = mRenderer->GetWidth() / static_cast<float>(mRenderer->GetHeight());
 
@@ -71,6 +81,10 @@ FGraphicsManager::~FGraphicsManager()
 	mHighlightDrawPipeline.reset();
 	mMeshPipeline.reset();
 	mRenderCollector.Clear();
+
+	mTexturedObjectBuffer.Reset();
+	mObjectContext1.Reset();
+
 	mRenderer->Release();
 	delete mRenderer;
 }
@@ -200,7 +214,18 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 	mRenderer->BindRenderTarget(CurrentRenderTarget, CurrentDepthStencil, false);
 }
 
-void FGraphicsManager::Render()
+static FConstants MakeMeshConstants(const FRenderInfo& info)
+{
+	FConstants c{};
+	c.Matrix = info.Model;
+	c.Color = info.Color;
+	c.UVOffset = info.UVOffset;
+	c.UseVertexColor = info.UseVertexColor;
+	c.HasTexture = info.Texture ? 1 : 0;
+	return c;
+}
+
+/*void FGraphicsManager::Render()
 {
 	mLastBoundTexture = nullptr;
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
@@ -303,7 +328,195 @@ void FGraphicsManager::Render()
 	{
 		mRenderer->RenderQuad2D(Quad2DInfo);
 	}
+}*/
+
+void FGraphicsManager::Render()
+{
+	mLastBoundTexture = nullptr;
+	mRenderer->RenderLines(mRenderCollector.LineInfos);
+	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
+
+	if (IsOptEnabled(EOptFlag::DrawCallSorting))
+	{
+		// 정렬 키를 미리 한 번씩만 계산한다.
+		for (FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
+		{
+			RenderInfo.ViewSpaceZ = mViewMatrix.TransformPosition(RenderInfo.Model.GetOrigin()).z;
+		}
+
+		std::sort(mRenderCollector.RenderInfos.begin(), mRenderCollector.RenderInfos.end(),
+			[&](const FRenderInfo& A, const FRenderInfo& B)
+			{
+				constexpr float BucketSize = 100.0f;
+				const int32 BucketA = static_cast<int32>(A.ViewSpaceZ / BucketSize);
+				const int32 BucketB = static_cast<int32>(B.ViewSpaceZ / BucketSize);
+
+				if (BucketA != BucketB)
+					return BucketA < BucketB;
+
+				if (A.Texture != B.Texture)
+					return A.Texture < B.Texture;
+
+				return A.VertexBuffer < B.VertexBuffer;
+			});
+	}
+
+	// 여기부터 추가: 정렬된 목록에서 텍스처 메시만 센다.
+	constexpr UINT ObjectStrideBytes = 256;
+	static_assert(sizeof(FConstants) <= ObjectStrideBytes);
+
+	const UINT TexturedCount = static_cast<UINT>(std::count_if(
+		mRenderCollector.RenderInfos.begin(),
+		mRenderCollector.RenderInfos.end(),
+		[](const FRenderInfo& Info) { return Info.Texture != nullptr; }));
+
+	bool bUseBatch = mObjectContext1.Get() != nullptr && TexturedCount > 0;
+
+	// 기존 용량보다 커졌을 때만 버퍼를 새로 만든다.
+	if (bUseBatch && TexturedCount > mTexturedObjectCapacity)
+	{
+		D3D11_BUFFER_DESC Desc{};
+		Desc.ByteWidth = TexturedCount * ObjectStrideBytes;
+		Desc.Usage = D3D11_USAGE_DYNAMIC;
+		Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		Desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+		Microsoft::WRL::ComPtr<ID3D11Buffer> NewBuffer;
+		if (SUCCEEDED(mRenderer->GetDevice()->CreateBuffer(
+			&Desc, nullptr, NewBuffer.GetAddressOf())))
+		{
+			mTexturedObjectBuffer = NewBuffer;
+			mTexturedObjectCapacity = TexturedCount;
+		}
+		else
+		{
+			bUseBatch = false;
+		}
+	}
+
+	// 텍스처 메시 전체의 FConstants를 Map 한 번으로 기록한다.
+	if (bUseBatch)
+	{
+		ID3D11DeviceContext* Context = mRenderer->GetDeviceContext();
+		D3D11_MAPPED_SUBRESOURCE Mapped{};
+
+		if (SUCCEEDED(Context->Map(
+			mTexturedObjectBuffer.Get(), 0,
+			D3D11_MAP_WRITE_DISCARD, 0, &Mapped)))
+		{
+			UINT Slot = 0;
+			for (const FRenderInfo& Info : mRenderCollector.RenderInfos)
+			{
+				if (!Info.Texture)
+					continue;
+
+				const FConstants Constants = MakeMeshConstants(Info);
+				std::memcpy(
+					static_cast<BYTE*>(Mapped.pData) + Slot * ObjectStrideBytes,
+					&Constants,
+					sizeof(Constants));
+				++Slot;
+			}
+
+			Context->Unmap(mTexturedObjectBuffer.Get(), 0);
+		}
+		else
+		{
+			bUseBatch = false;
+		}
+	}
+
+	// 업로드에 실패해 기존 경로로 돌아갈 때 b0를 다시 바인딩하게 한다.
+	if (!bUseBatch && TexturedCount > 0 && mTexturedObjectBuffer)
+		mRenderer->InvalidateBindingCache();
+
+	// 여기부터 기존 드로우 루프. 텍스처 메시의 b0 갱신 부분만 분기한다.
+	UINT TexturedSlot = 0;
+
+	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
+	{
+		if (RenderInfo.Texture)
+		{
+			if (RenderInfo.Texture != mLastBoundTexture)
+			{
+				mMeshPipeline->ClearShaderResource();
+				mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
+				mLastBoundTexture = RenderInfo.Texture;
+			}
+
+			if (bUseBatch)
+			{
+				// 각 슬롯은 256바이트 = 16개의 16바이트 상수.
+				const UINT FirstConstant = TexturedSlot * 16;
+				mRenderer->RenderPrimitiveIndexed(
+					mMeshPipeline,
+					RenderInfo,
+					0,
+					mObjectContext1.Get(),
+					mTexturedObjectBuffer.Get(),
+					FirstConstant);
+			}
+			else
+			{
+				// D3D11.1 미지원 또는 업로드 실패 시 기존 경로.
+				const FConstants Constants = MakeMeshConstants(RenderInfo);
+				mMeshPipeline->UpdateConstantBuffer(0, Constants);
+				mRenderer->RenderPrimitiveIndexed(mMeshPipeline, RenderInfo);
+			}
+
+			++TexturedSlot;
+		}
+		else
+		{
+			// 텍스처 없는 메시는 이번 변경의 대상이 아니다.
+			mLastBoundTexture = nullptr;
+			mRenderer->RenderPrimitiveIndexed(RenderInfo);
+		}
+	}
+
+	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())
+	{
+		mRenderer->RenderQuad(QuadInfo);
+	}
+
+	if (FShowFlags::Get().IsEnabled(EShowFlag::Grid))
+	{
+		FMatrix GridWorldMatrix = FMatrix::Identity;
+
+		if (mViewportType == EViewportType::Front)
+		{
+			GridWorldMatrix = FMatrix::RotateY(90);
+		}
+		else if (mViewportType == EViewportType::Side)
+		{
+			GridWorldMatrix = FMatrix::RotateX(90);
+		}
+
+		mRenderer->RenderWorldAxis(
+			mViewMatrix, mProjectionMatrix,
+			FVector4(0.f, 0.f, 1.f, 1.f),
+			FVector3(0.f, 0.f, 1.f), 0.002f);
+		mRenderer->RenderWorldGrid(
+			GridWorldMatrix * mViewUnifiedProjectionMatrix,
+			mCameraLocation, GridGap);
+	}
+
+	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetTransparentQuadInfos())
+	{
+		mRenderer->RenderQuad(QuadInfo);
+	}
+
+	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOverlayQuadInfos())
+	{
+		mRenderer->RenderQuad(QuadInfo);
+	}
+
+	for (const FRenderQuad2DInfo& Quad2DInfo : mRenderCollector.GetQuad2DInfos())
+	{
+		mRenderer->RenderQuad2D(Quad2DInfo);
+	}
 }
+
 
 void FGraphicsManager::Display()
 {

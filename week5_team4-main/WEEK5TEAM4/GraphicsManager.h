@@ -116,6 +116,10 @@ private:
 	float mProjectionDuration = 1.0f;
 	bool mbProjectionTransitioning = false;
 
+	Microsoft::WRL::ComPtr<ID3D11DeviceContext1> mObjectContext1;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> mTexturedObjectBuffer;
+	UINT mTexturedObjectCapacity = 0;
+
 	TSharedPtr<FRenderPipeline> mMeshPipeline;
 
 	TSharedPtr<FRenderPipeline> mHighlightMarkPipeline;
