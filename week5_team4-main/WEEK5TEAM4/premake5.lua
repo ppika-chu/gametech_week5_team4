@@ -63,7 +63,7 @@ project "WEEK5TEAM4"
         symbols "On"
         floatingpoint "Fast"
         vectorextensions "AVX2"
-        flags { "LinkTimeOptimization" }
+        linktimeoptimization "On"
         links {
             "freetype"
         }

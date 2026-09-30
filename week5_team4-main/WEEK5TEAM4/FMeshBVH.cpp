@@ -60,7 +60,8 @@ bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, floa
         const int32 CurrentIndex = Stack[--StackSize];
         const FMeshBVHNode& Node = Nodes[CurrentIndex];
 
-        if (!RayIntersectsAABB(LocalRay, InOutMaxT, Node.Bounds)) continue;
+        float Enter;
+        if (!RayIntersectsAABB(LocalRay, InOutMaxT, Node.Bounds, Enter)) continue;
         if (Node.Left < 0)
         {
             for (int32 i = 0; i < Node.TriCount; ++i)
@@ -68,7 +69,7 @@ bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, floa
                 const FPreComputedTri& Tri = Triangles[Node.FirstTri + i];
                 const FVector P = FVector::cross(LocalDir, Tri.E2);
                 const float Det = FVector::dot(Tri.E1, P);
-                if (fabsf(Det) > 1e-8f) continue;   // 평행하므로 hit 검사 pass
+                if (fabsf(Det) < 1e-8f) continue;   // 평행하므로 hit 검사 pass
 
                 const FVector T = LocalOrigin - Tri.V0;
                 const float InvDet = 1.0f / Det;
