@@ -410,7 +410,7 @@ struct FMatrix {
 		return R;
 	}
 
-	// 아핀 행렬(마지막 열이 0,0,0,1)의 역행렬.
+/*	// 아핀 행렬(마지막 열이 0,0,0,1)의 역행렬.
 	// MakeMatrix() 결과가 항상 이 형태라 일반 4x4 역행렬이 필요 없다.
 	//   M = | A 0 |        M^-1 = | A^-1     0 |
 	//       | t 1 |               | -t*A^-1  1 |
@@ -449,6 +449,64 @@ struct FMatrix {
 		R.M[3][2] = -(M[3][0] * R.M[0][2] + M[3][1] * R.M[1][2] + M[3][2] * R.M[2][2]);
 		
 		return R;
+	}*/
+
+	[[nodiscard]] FMatrix AffineInverse() const
+	{
+		const __m128 A = _mm_loadu_ps(M[0]);
+		const __m128 B = _mm_loadu_ps(M[1]);
+		const __m128 C = _mm_loadu_ps(M[2]);
+
+		const auto Cross = [](__m128 X, __m128 Y) -> __m128
+		{
+			const __m128 Xyzx = _mm_shuffle_ps(X, X, _MM_SHUFFLE(3, 0, 2, 1));
+			const __m128 Xzxy = _mm_shuffle_ps(X, X, _MM_SHUFFLE(3, 1, 0, 2));
+			const __m128 Yyzx = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 0, 2, 1));
+			const __m128 Yzxy = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 1, 0, 2));
+
+			return _mm_sub_ps(
+				_mm_mul_ps(Xyzx, Yzxy),
+				_mm_mul_ps(Xzxy, Yyzx));
+		};
+
+		__m128 Cofactor0 = Cross(B, C);
+		__m128 Cofactor1 = Cross(C, A);
+		__m128 Cofactor2 = Cross(A, B);
+
+		// det = dot(A, Cofactor0). w 성분은 0이다.
+		const __m128 Products = _mm_mul_ps(A, Cofactor0);
+		const __m128 PairSums = _mm_add_ps(Products, _mm_movehl_ps(Products, Products));
+		const __m128 DetVector = _mm_add_ss(PairSums, _mm_shuffle_ps(PairSums, PairSums, _MM_SHUFFLE(1, 1, 1, 1)));
+		const float Det = _mm_cvtss_f32(DetVector);
+		
+		if (FMath::Abs(Det) < SMALL_NUMBER)
+		{
+			return FMatrix::Zero;
+		}
+
+		const __m128 InvDet = _mm_set1_ps(1.0f / Det);
+		Cofactor0 = _mm_mul_ps(Cofactor0, InvDet);
+		Cofactor1 = _mm_mul_ps(Cofactor1, InvDet);
+		Cofactor2 = _mm_mul_ps(Cofactor2, InvDet);
+
+		// 여인수 행렬을 전치해 역행렬의 행 3개를 만든다.
+		__m128 Row3 = _mm_setzero_ps();
+		_MM_TRANSPOSE4_PS(Cofactor0, Cofactor1, Cofactor2, Row3);
+
+		const __m128 Translation = _mm_sub_ps( _mm_setzero_ps(),
+			_mm_add_ps(
+				_mm_add_ps(
+					_mm_mul_ps(_mm_set1_ps(M[3][0]), Cofactor0),
+					_mm_mul_ps(_mm_set1_ps(M[3][1]), Cofactor1)),
+				_mm_mul_ps(_mm_set1_ps(M[3][2]), Cofactor2)));
+
+		FMatrix Result;
+		_mm_storeu_ps(Result.M[0], Cofactor0);
+		_mm_storeu_ps(Result.M[1], Cofactor1);
+		_mm_storeu_ps(Result.M[2], Cofactor2);
+		_mm_storeu_ps(Result.M[3], _mm_add_ps(Translation, _mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f)));
+
+		return Result;
 	}
 
 	// 월드 transform 행렬일 때, 이동 벡터만 뽑아오는 용도
