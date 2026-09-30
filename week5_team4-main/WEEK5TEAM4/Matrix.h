@@ -410,47 +410,11 @@ struct FMatrix {
 		return R;
 	}
 
-/*	// 아핀 행렬(마지막 열이 0,0,0,1)의 역행렬.
+	// 아핀 행렬(마지막 열이 0,0,0,1)의 역행렬.
 	// MakeMatrix() 결과가 항상 이 형태라 일반 4x4 역행렬이 필요 없다.
 	//   M = | A 0 |        M^-1 = | A^-1     0 |
 	//       | t 1 |               | -t*A^-1  1 |
 	// Transpose() 와 달리 비균등 스케일에도 동작한다.
-	[[nodiscard]] FMatrix AffineInverse() const
-	{
-		const float C00 =  (M[1][1] * M[2][2] - M[1][2] * M[2][1]);
-		const float C01 = -(M[1][0] * M[2][2] - M[1][2] * M[2][0]);
-		const float C02 =  (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
-
-		const float Det = M[0][0] * C00 + M[0][1] * C01 + M[0][2] * C02;
-		if (FMath::Abs(Det) < SMALL_NUMBER)
-		{
-			return FMatrix::Zero;   // 스케일 0 등 역행렬이 없는 경우
-		}
-
-		const float C10 = -(M[0][1] * M[2][2] - M[0][2] * M[2][1]);
-		const float C11 =  (M[0][0] * M[2][2] - M[0][2] * M[2][0]);
-		const float C12 = -(M[0][0] * M[2][1] - M[0][1] * M[2][0]);
-		const float C20 =  (M[0][1] * M[1][2] - M[0][2] * M[1][1]);
-		const float C21 = -(M[0][0] * M[1][2] - M[0][2] * M[1][0]);
-		const float C22 =  (M[0][0] * M[1][1] - M[0][1] * M[1][0]);
-
-		const float Inv = 1.0f / Det;
-
-		FMatrix R = FMatrix::Identity;
-
-		// 수반행렬 = 여인수 행렬의 전치
-		R.M[0][0] = C00 * Inv;  R.M[0][1] = C10 * Inv;  R.M[0][2] = C20 * Inv;
-		R.M[1][0] = C01 * Inv;  R.M[1][1] = C11 * Inv;  R.M[1][2] = C21 * Inv;
-		R.M[2][0] = C02 * Inv;  R.M[2][1] = C12 * Inv;  R.M[2][2] = C22 * Inv;
-
-		// 이동 성분 : -t * A^-1
-		R.M[3][0] = -(M[3][0] * R.M[0][0] + M[3][1] * R.M[1][0] + M[3][2] * R.M[2][0]);
-		R.M[3][1] = -(M[3][0] * R.M[0][1] + M[3][1] * R.M[1][1] + M[3][2] * R.M[2][1]);
-		R.M[3][2] = -(M[3][0] * R.M[0][2] + M[3][1] * R.M[1][2] + M[3][2] * R.M[2][2]);
-		
-		return R;
-	}*/
-
 	[[nodiscard]] FMatrix AffineInverse() const
 	{
 		const __m128 A = _mm_loadu_ps(M[0]);
