@@ -9,6 +9,7 @@
 
 #include "OptimizationFlags.h"
 #include "FScopeCycleCounter.h"
+#include <tracy/Tracy.hpp>
 
 UWorld::~UWorld()
 {
@@ -167,6 +168,7 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 
 	if (bUseBVH)
 	{
+		ZoneScopedN("BVH Cull + Collect");
 		mBVH.QueryFrustum(*outCollector.Frustum, [&outCollector](UPrimitiveComponent* Component)
 		{	
 			const FAABB WorldBounds = Component->GetBoundingBox();
@@ -181,6 +183,7 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 
 		if (FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
 		{
+			ZoneScopedN("UUID Text Collect");
 			for (AActor* actor : mActors)
 			{
 				for (UActorComponent* component : actor->GetComponents())
@@ -194,7 +197,7 @@ void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 		}
 	}
 	else{
-		
+		ZoneScopedN("Actor Loop Collect (Linear/Off)");
 		for (AActor* actor : mActors)
 		{
 			actor->Render(outCollector);

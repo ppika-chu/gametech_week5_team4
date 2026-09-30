@@ -30,6 +30,7 @@
 #include "EngineMathLibrary.h"
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyD3D11.hpp>
+#include "OptimizationFlags.h"
 #include "FScopeCycleCounter.h"
 
 #if IS_OBJ_VIEWER
@@ -38,6 +39,10 @@
 
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
+#ifdef TRACY_ENABLE
+	tracy::SetThreadName("Main Thread");
+#endif
+
 	// Initialize window infos
 	WCHAR WindowClass[] = L"JungleWindowClass";
 	WCHAR Title[] = L"Game Tech Lab";
@@ -230,8 +235,13 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	
 	mGraphicsManager->GetRenderer()->ResetDrawCallCount();
 	
+	// 캡처만 보고도 측정 조건을 알 수 있도록 컬링 모드를 기록 (0 = Off, 1 = Linear, 2 = BVH)
+	TracyPlot("Culling Mode", static_cast<int64_t>(GCullingMode));
+
 	for (int32 i = 0; i < ViewportCount; ++i)
 	{
+		ZoneScopedN("Viewport");
+		ZoneValue(i);
 		int32 CurrentIndex = bIsSplit ? i : ActiveIndex;
 		FEditorViewport* CurrentViewport = &mViewports[CurrentIndex];
 
@@ -262,6 +272,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		RenderCollector.Frustum = &ViewFrustum;
 
 		mSceneManager->Render(deltaTime, RenderCollector);
+		TracyPlot("Drawn Objects", static_cast<int64_t>(RenderCollector.GetDrawnObjCount()));
+		TracyPlot("Culled Objects", static_cast<int64_t>(RenderCollector.GetCulledObjCount()));
 
 		// 마우스 피킹 처리
 		// 뷰포트가 ImGui 창이 되면서 그 위에서는 io.WantCaptureMouse 가 항상 true 다.
@@ -273,6 +285,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		if (CurrentViewport->Client->IsActive() && Input.WasPressed(VK_LBUTTON) && !CurrentViewport->Client->mGizmo.IsDragging() && !CurrentViewport->Client->mGizmo.IsMouseOverHandle() && !bIsAssetDragging)
 		{
+			ZoneScopedN("Mouse Picking");
 			AActor* HitActor = CurrentViewport->Client->PerformMousePicking(CurrentViewport->Window->Rect, CurrentRatio, RenderCollector, mSceneManager->GetCurrentWorld()->GetBVH());
 			if (HitActor)
 			{
@@ -348,6 +361,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	}
 
 	mGraphicsManager->EndGpuRenderTimer();
+	TracyPlot("Draw Calls", static_cast<int64_t>(mGraphicsManager->GetRenderer()->GetDrawCallCount()));
 
 	FGuiReference GuiReference;
 	GuiReference.FrameTimer = FrameTimer;

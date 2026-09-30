@@ -214,9 +214,12 @@ void FGraphicsManager::Render()
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 
+	TracyPlot("RenderInfos", static_cast<int64_t>(mRenderCollector.RenderInfos.Num()));
+
 	if (IsOptEnabled(EOptFlag::DrawCallSorting))
 	{
 		SCOPE_CYCLE_COUNTER("Sort RenderInfos");
+		ZoneScopedN("Sort RenderInfos");
 		// 정렬 키를 미리 한 번씩만 계산한다. 비교자 안에서 계산하면 N log N 배로 곱해진다.
 		for (FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 		{
@@ -249,6 +252,11 @@ void FGraphicsManager::Render()
 
 	{
 	SCOPE_CYCLE_COUNTER("Mesh Draw Submit");
+	// CPU: 드로우 제출(CB 갱신 + 바인딩 + DrawIndexed) / GPU: 같은 메시 패스의 실제 처리 시간
+	ZoneScopedN("Mesh Draw Submit");
+	TracyD3D11Zone(mRenderer->GetTracyGpuContext(), "GPU Mesh Pass");
+
+	int64_t TextureSwitchCount = 0;
 	for (const FRenderInfo& RenderInfo : mRenderCollector.RenderInfos)
 	{
 		if (RenderInfo.Texture)
@@ -258,6 +266,7 @@ void FGraphicsManager::Render()
 				mMeshPipeline->ClearShaderResource();
 				mMeshPipeline->SetShaderResource(0, RenderInfo.Texture->GetSRV());
 				mLastBoundTexture = RenderInfo.Texture;
+				++TextureSwitchCount;
 			}
 
 			FConstants Constants{};
@@ -277,8 +286,13 @@ void FGraphicsManager::Render()
 			mRenderer->RenderPrimitiveIndexed(RenderInfo);
 		}
 	}
+
+	// 텍스처가 바뀔 때마다 BindPipeline 캐시가 깨져 상태를 전부 다시 바인딩한다 (드라이버 부하 지표)
+	TracyPlot("Texture Switches", TextureSwitchCount);
 	}
 
+	// 함수 스코프에 이미 "Render Submit" 존이 있으므로 이름을 붙인 존으로 선언한다 (변수 이름 충돌 방지)
+	ZoneNamedN(OverlayPassZone, "Quads / Grid / 2D", true);
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())
 	{
 		mRenderer->RenderQuad(QuadInfo);
@@ -320,9 +334,12 @@ void FGraphicsManager::Render()
 void FGraphicsManager::Display()
 {
 	// Present가 길면 CPU가 GPU/드라이버를 기다리고 있다는 뜻
-	SCOPE_CYCLE_COUNTER("Present");
-	ZoneScopedN("Present");
-	mRenderer->SwapBuffer();
+	{
+		// Present 구간은 SwapBuffer만 감싼다 (GPU 타이머 수집 시간이 섞이지 않게)
+		SCOPE_CYCLE_COUNTER("Present");
+		ZoneScopedN("Present");
+		mRenderer->SwapBuffer();
+	}
 	mRenderer->CollectGpuProfile();
 }
 
