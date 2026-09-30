@@ -10,6 +10,7 @@
 #include "FEditorViewportClient.h"
 #include "OptimizationFlags.h"
 #include <algorithm>
+#include <tracy/Tracy.hpp>
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
@@ -77,6 +78,8 @@ FGraphicsManager::~FGraphicsManager()
 
 void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight, const FViewport& Viewport, const EViewModeIndex InViewMode, const EViewportType InViewportType)
 {
+	ZoneScopedN("Render Prepare");
+	TracyD3D11Zone(mRenderer->GetTracyGpuContext(), "GPU Render Prepare");
 	mViewportType = InViewportType;
 	const bool bIsOrtho = (InViewportType != EViewportType::Perspective);
 
@@ -122,6 +125,8 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primitives)
 {
+	ZoneScopedN("Render Highlight");
+	TracyD3D11Zone(mRenderer->GetTracyGpuContext(), "GPU Highlight");
 	if (Primitives.Num() == 0)
 	{
 		return;
@@ -202,6 +207,8 @@ void FGraphicsManager::RenderHighLight(const TArray<UPrimitiveComponent*>& Primi
 
 void FGraphicsManager::Render()
 {
+	ZoneScopedN("Render Submit");
+	TracyD3D11Zone(mRenderer->GetTracyGpuContext(), "GPU Scene Render");
 	mLastBoundTexture = nullptr;
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 	mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
@@ -307,7 +314,9 @@ void FGraphicsManager::Render()
 
 void FGraphicsManager::Display()
 {
+	ZoneScopedN("Present");
 	mRenderer->SwapBuffer();
+	mRenderer->CollectGpuProfile();
 }
 
 bool FGraphicsManager::IsPerspectiveProjection() const

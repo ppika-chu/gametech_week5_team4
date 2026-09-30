@@ -38,6 +38,7 @@
 #include "FSceneConverter.h"
 
 #include "OptimizationFlags.h"
+#include <tracy/Tracy.hpp>
 
 FSceneManager::FSceneManager()
 {
@@ -111,16 +112,19 @@ void FSceneManager::RefreshContentBrowser(const std::filesystem::path& TargetDir
 
 void FSceneManager::Tick(float deltaTime)
 {
+	ZoneScopedN("Scene Tick");
 	mCurrentWorld->Tick(deltaTime);
 }
 
 void FSceneManager::Render(float deltaTime, FRenderCollector& outCollector)
 {
+	ZoneScopedN("Scene Collect");
 	mCurrentWorld->Render(deltaTime, outCollector);
 }
 
 void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 {
+	ZoneScopedN("Editor GUI");
 	mRenderer = guiReference.GraphicsManager->GetRenderer();
 
 	//ImGui

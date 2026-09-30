@@ -8,6 +8,7 @@
 #include "Vector.h"
 #include "RenderInfo.h"
 #include "FRenderPipeline.h"
+#include <tracy/TracyD3D11.hpp>
 
 struct FCameraConstants
 {
@@ -494,6 +495,7 @@ public:
 	void ClearAllShaderResources() const;
 
 	void SwapBuffer();
+	void CollectGpuProfile();
 
 	//해상도 변경 시 호출
 	void OnResize(UINT width, UINT height);
@@ -503,6 +505,7 @@ public:
 	FORCEINLINE const D3D11_VIEWPORT& GetViewport() const { return ViewportInfo; }
 	FORCEINLINE ID3D11Device* GetDevice() const { return Device; }
 	FORCEINLINE ID3D11DeviceContext* GetDeviceContext() const { return DeviceContext; }
+	FORCEINLINE TracyD3D11Ctx GetTracyGpuContext() const { return TracyGpuContext; }
 	FORCEINLINE void SetViewModeIndex(EViewModeIndex InViewModeIndex) { ViewModeIndex = InViewModeIndex; }
 	FORCEINLINE TSharedPtr<FRenderTarget2D> GetBindedRenderTarget() const { return BindedRenderTarget; }
 	FORCEINLINE TSharedPtr<FDepthStencil> GetBindedDepthStencil() const { return BindedDepthStencil; }
@@ -541,6 +544,7 @@ private:
     ID3D11Device* Device = nullptr;
     ID3D11DeviceContext* DeviceContext = nullptr;
     IDXGISwapChain* SwapChain = nullptr;
+	TracyD3D11Ctx TracyGpuContext = nullptr;
 
 	FSamplerStatePool SamplerStatePool;
 	FDepthStencilStatePool DepthStencilStatePool;

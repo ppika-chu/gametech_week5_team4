@@ -28,6 +28,8 @@
 #include "Serializers.h"
 #include "NativeFileDialog.h"
 #include "EngineMathLibrary.h"
+#include <tracy/Tracy.hpp>
+#include <tracy/TracyD3D11.hpp>
 
 #if IS_OBJ_VIEWER
 #include "FObjViewer.h"
@@ -184,6 +186,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 {
 	if (GInTick) return;
 	GInTick = true;
+
+	ZoneScopedN("Engine Tick");
 
 	FrameTimer->StartFrame();
 	float deltaTime = FrameTimer->GetDeltaTime();
@@ -381,12 +385,16 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	mGraphicsManager->GetRenderer()->BindFrameBuffer();
 
-	ImGui::Render();
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+	{
+		TracyD3D11Zone(mGraphicsManager->GetRenderer()->GetTracyGpuContext(), "GPU ImGui");
+		ImGui::Render();
+		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+	}
 
 	mGraphicsManager->Display();
 	
 	FrameTimer->EndFrame();
+	FrameMark;
 
 	GInTick = false;
 }

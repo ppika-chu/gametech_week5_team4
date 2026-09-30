@@ -26,6 +26,8 @@ namespace
 void URenderer::Create(HWND hWindow)
 {
 	CreateDeviceAndSwapChain(hWindow);
+	TracyGpuContext = TracyD3D11Context(Device, DeviceContext);
+	TracyD3D11ContextName(TracyGpuContext, "WEEK5TEAM4 D3D11", 16);
 	CreateFrameBuffer();
 	CreateDepthStencilBuffer();
 
@@ -217,6 +219,13 @@ void URenderer::Release()
 	DepthStencilView->Release();
 	DepthStencilBuffer->Release();
 	ReleaseFrameBuffer();
+
+	if (TracyGpuContext)
+	{
+		TracyD3D11Destroy(TracyGpuContext);
+		TracyGpuContext = nullptr;
+	}
+
 	ReleaseDeviceAndSwapChain();
 }
 
@@ -226,6 +235,11 @@ void URenderer::SwapBuffer()
 	// fps 고정 빼기 (Tearing 명시적 허용)
 	SwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
 
+}
+
+void URenderer::CollectGpuProfile()
+{
+	TracyD3D11Collect(TracyGpuContext);
 }
 
 void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)

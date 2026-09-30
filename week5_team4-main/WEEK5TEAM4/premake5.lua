@@ -12,6 +12,7 @@ project "WEEK5TEAM4"
     files {
         "**.cpp",
         "**.h",
+        "%{wks.location}/Vendor/include/public/TracyClient.cpp",
         "../Assets/**",
     }
 
@@ -30,6 +31,7 @@ project "WEEK5TEAM4"
         "ImGui",
         "Json",
         "%{wks.location}/Vendor/include",
+        "%{wks.location}/Vendor/include/public",
     }
 
     libdirs {
@@ -61,6 +63,7 @@ project "WEEK5TEAM4"
         runtime "Release"
         optimize "Off"
         symbols "On"
+        defines { "TRACY_ENABLE" }
         links { 
             "freetype" 
         }
@@ -87,5 +90,6 @@ project "WEEK5TEAM4"
 
 filter "toolset:msc*"
     buildoptions { "/utf-8" }
+    editandcontinue "Off"
 
 filter {}
