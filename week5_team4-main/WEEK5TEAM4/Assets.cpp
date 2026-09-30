@@ -394,17 +394,32 @@ const FVector4& FSpriteAtlasAsset::GetFrameSubUV(int32 FrameIndex) const
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetDiffuseTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(DiffuseTexture, true);
+    if (!bDiffuseResolved)
+    {
+        CachedDiffuseTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(DiffuseTexture, true);
+        bDiffuseResolved = true;
+    }
+    return CachedDiffuseTexture;
 }
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetSpecularTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(SpecularTexture, true);
+	if (!bSpecularResolved)
+	{
+		CachedSpecularTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(SpecularTexture, true);
+		bSpecularResolved = true;
+	}
+	return CachedSpecularTexture;
 }
 
 TSharedPtr<FTexture2DAsset> FMaterialAsset::GetNormalTexture() const
 {
-	return FAssetManager::Get().GetAssetAs<FTexture2DAsset>(NormalTexture, true);
+	if (!CachedNormalTexture)
+	{
+		CachedNormalTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(NormalTexture, true);
+		bNormalResolved = true;
+	}
+	return CachedNormalTexture;
 }
 
 TSharedPtr<FAsset> FMaterialAssetLoader::LoadAsset(const FGuid& AssetID, const FName& AssetName, FArchive& Ar)
@@ -425,6 +440,8 @@ TSharedPtr<FAsset> FMaterialAssetLoader::LoadAsset(const FGuid& AssetID, const F
 	Ar << NormalTexture;
 	#endif
 
+	// TODO: 머티리얼 살아있는 동안 텍스처 에셋이 핫리로드/교체되는 기능이 생기면
+	// 이 캐시를 무효화하는 훅이 필요함 (현재는 그런 기능 없음)
 	return MakeShared<FMaterialAsset>(AssetID,
 									  AssetName,
 									  Payload.AmbientColor,

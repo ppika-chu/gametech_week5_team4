@@ -268,6 +268,16 @@ private:
 	FGuid SpecularTexture;
 	FGuid NormalTexture;
 	float Opacity;
+
+
+	// 아직 조회 안 한 상태와 조회했는데 텍스처가 없음 상태를 구분하기 위해 bool flag
+	mutable TSharedPtr<FTexture2DAsset> CachedDiffuseTexture;
+	mutable TSharedPtr<FTexture2DAsset> CachedSpecularTexture;
+	mutable TSharedPtr<FTexture2DAsset> CachedNormalTexture;
+	mutable bool bDiffuseResolved = false;
+	mutable bool bSpecularResolved = false;
+	mutable bool bNormalResolved = false;
+
 };
 
 class FMaterialAssetLoader : public FAssetLoader
