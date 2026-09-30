@@ -59,10 +59,13 @@ project "WEEK5TEAM4"
 
     filter "configurations:Release"
         runtime "Release"
-        optimize "Off"
+        optimize "Speed"
         symbols "On"
-        links { 
-            "freetype" 
+        floatingpoint "Fast"
+        vectorextensions "AVX2"
+        flags { "LinkTimeOptimization" }
+        links {
+            "freetype"
         }
 
     filter "configurations:ObjViewerRelease"
