@@ -66,6 +66,7 @@ project "WEEK5TEAM4"
         floatingpoint "Fast"
         vectorextensions "AVX2"
         linktimeoptimization "On"
+	defines { "TRACY_ENABLE" }
         links {
             "freetype"
         }
