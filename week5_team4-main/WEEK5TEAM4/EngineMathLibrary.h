@@ -222,29 +222,64 @@ inline bool RayIntersectsTriangle(const FVector& Origin, const FVector& Dir, con
 	// OutU, OutV 정확환 클릭지점을 확인하려면 필요
 }
 
-inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB, float& OutEnter)
+// Picking Ray 하나당 한 번만 만드는 SIMD RAY
+struct FRaySIMD
+{
+	__m128 Origin;	// (x, y, z, 0)
+	__m128 InvDir;	// (1/x, 1/y, 1/z, 0)
+	
+	explicit FRaySIMD(const FRay& Ray)
+	{
+		auto SafeInv = [](float D)
+		{
+			constexpr float Eps = 1e-20f;
+			if (fabsf(D) < Eps) D = (D < 0.f) ? -Eps : Eps;
+			return 1.0f / D;
+		};
+
+		Origin = _mm_setr_ps(Ray.Origin.x, Ray.Origin.y, Ray.Origin.z, 0.0f);
+		InvDir = _mm_setr_ps(SafeInv(Ray.Direction.x), SafeInv(Ray.Direction.y), SafeInv(Ray.Direction.z), 0.0f);
+	}
+};
+
+inline bool RayIntersectsAABB(const FRaySIMD& Ray, float Distance, const FAABB& AABB, float& OutEnter)
 {
 	if (Distance < 0.f)	return false;
 
-	__m128 Origin = _mm_set_ps(1.f, Ray.Origin.z, Ray.Origin.y, Ray.Origin.x);
-	__m128 InvDir = _mm_set_ps(1.f, 1.f/Ray.Direction.z, 1.f/Ray.Direction.y, 1.f/Ray.Direction.x);
-	__m128 Min = _mm_set_ps(0.f, AABB.Min.z, AABB.Min.y, AABB.Min.x);
-	__m128 Max = _mm_set_ps(0.f, AABB.Max.z, AABB.Max.y, AABB.Max.x);
+	const __m128 Min = _mm_loadu_ps(&AABB.Min.x);
+	const __m128 MaxRaw = _mm_loadu_ps(&AABB.Min.z); // Max.x부터 읽으면 구조체를 넘어가서 한 칸 앞에서 읽기
+	const __m128 Max = _mm_shuffle_ps(MaxRaw, MaxRaw, _MM_SHUFFLE(3, 3, 2, 1));
 
-	__m128 T0 = _mm_mul_ps(_mm_sub_ps(Min, Origin), InvDir);
-	__m128 T1 = _mm_mul_ps(_mm_sub_ps(Max, Origin), InvDir);
-	__m128 TMin = _mm_min_ps(T0, T1);
-	__m128 TMax = _mm_max_ps(T0, T1);
+	const __m128 T0 = _mm_mul_ps(_mm_sub_ps(Min, Ray.Origin), Ray.InvDir);
+	const __m128 T1 = _mm_mul_ps(_mm_sub_ps(Max, Ray.Origin), Ray.InvDir);
 
-	float MinArr[4], MaxArr[4];
-	_mm_storeu_ps(MinArr, TMin);
-	_mm_storeu_ps(MaxArr, TMax);
+	const __m128 ZERO = _mm_setzero_ps();
+	const __m128 DistV = _mm_set1_ps(Distance);
 
-	float Enter = (std::max)({0.f, MinArr[0], MinArr[1], MinArr[2]});
-	float Exit = (std::min)({Distance, MaxArr[0], MaxArr[1], MaxArr[2]});
-	OutEnter = Enter;
+	// w값만 ZERO , DistV로 바꾸기
+	__m128 TNear = _mm_blend_ps(_mm_min_ps(T0, T1), ZERO, 0b1000);
+	__m128 TFar = _mm_blend_ps(_mm_max_ps(T0, T1), DistV, 0b1000);
 
-	return Enter <= Exit;
+	// Enter = max(0, x, y, z) / Exit = min(Dist, x, y, z)
+	TNear = _mm_max_ps(TNear, ZERO);
+	TNear = _mm_max_ps(TNear, _mm_shuffle_ps(TNear, TNear, _MM_SHUFFLE(2, 3, 0, 1)));
+	TNear = _mm_max_ps(TNear, _mm_shuffle_ps(TNear, TNear, _MM_SHUFFLE(1, 0, 3, 2)));
+	
+	TFar = _mm_min_ps(TFar, DistV);
+	TFar = _mm_min_ps(TFar, _mm_shuffle_ps(TFar, TFar, _MM_SHUFFLE(2, 3, 0, 1)));
+	TFar = _mm_min_ps(TFar, _mm_shuffle_ps(TFar, TFar, _MM_SHUFFLE(1, 0, 3, 2)));
+
+	OutEnter = _mm_cvtss_f32(TNear);
+
+	// cmple : less or equal, ss : 맨 끝만
+	// bit = 1 이면 hit 이므로 true 반환
+	return (_mm_movemask_ps(_mm_cmple_ss(TNear, TFar)) & 1) != 0;
+}
+
+// 기존 시그니처
+inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB, float& OutEnter)
+{
+	return RayIntersectsAABB(FRaySIMD(Ray), Distance, AABB, OutEnter);
 }
 
 struct  alignas(16) FFrustum

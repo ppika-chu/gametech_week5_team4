@@ -91,6 +91,9 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	++PickAttemptCount;
 	// Picking time 기록 start
 	const auto StartTime = std::chrono::high_resolution_clock::now();
+	
+	// 가장 최근 picking의 test count를 위해 누적값 기억.
+	const uint64 TestCountBefore = PickTestCount;
 
 	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(ViewportRect.X);
 	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(ViewportRect.Y);
@@ -144,6 +147,9 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 
 	// 누적 시간 ( End - Start ) 기록
 	PickAccumulatedTimeMs += std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
+	
+	// 가장 최근 picking의 충돌 검사 횟수 (현재 값 - 누적값)
+	PickLastTestCount = PickTestCount - TestCountBefore;
 	return NearestActor;
 }
 
