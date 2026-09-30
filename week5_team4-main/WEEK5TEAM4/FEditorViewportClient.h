@@ -102,6 +102,7 @@ public:
 
 	uint64 GetPickAttemptCount() const { return PickAttemptCount; }
 	uint64 GetPickTestCount() const { return PickTestCount; }
+	uint64 GetLastPickTestCount() const { return PickLastTestCount; }
 	double GetPickAccumulatedTimeMs() const { return PickAccumulatedTimeMs; }
 	double GetPickLastTimeMs() const { return PickLastTimeMs; }
 private:
@@ -140,6 +141,9 @@ private:
 
 	// 충돌 검사할 때마다 +1
 	mutable uint64 PickTestCount = 0;
+
+	// 가장 최근 picking의 충돌 검사 횟수
+	mutable uint64 PickLastTestCount = 0;
 
 	// 가장 마지막 Picking에 소요된 시간(ms)
 	mutable double PickLastTimeMs = 0.0;

@@ -30,6 +30,7 @@
 #include "EngineMathLibrary.h"
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyD3D11.hpp>
+#include "FScopeCycleCounter.h"
 
 #if IS_OBJ_VIEWER
 #include "FObjViewer.h"
@@ -394,6 +395,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	mGraphicsManager->Display();
 	
 	FrameTimer->EndFrame();
+	FStatRegistry::Get().EndFrame();
 	FrameMark;
 
 	GInTick = false;

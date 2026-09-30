@@ -42,6 +42,11 @@ public:
 		return UPrimitiveComponent::GetMeshIndices();
 	}
 
+	const FMeshBVH* GetMeshBVH() const override
+	{
+		return mMeshAsset ? &mMeshAsset->GetMeshBVH() :  nullptr;
+	}
+
 	// 어떤 Material을 쓰게 할 것인지 Setter
 	void SetMaterial(int32 index, const TSharedPtr<FMaterialAsset>& InMaterial)
 	{

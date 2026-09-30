@@ -8,6 +8,7 @@
 #include "ObjectFactory.h"
 
 #include "OptimizationFlags.h"
+#include "FScopeCycleCounter.h"
 
 UWorld::~UWorld()
 {
@@ -122,6 +123,7 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 
 void UWorld::Tick(float deltaTime)
 {
+	SCOPE_CYCLE_COUNTER("World Tick");
 	for (UActorComponent* ActorComponent : TickComponents)
 	{
 		ActorComponent->Tick(deltaTime);
@@ -155,6 +157,7 @@ void UWorld::UnregisterTick(UActorComponent* Component)
 
 void UWorld::Render(float deltaTime, FRenderCollector& outCollector)
 {
+	SCOPE_CYCLE_COUNTER("Scene Collect");
 	// 쿼드/라인 정보는 Render()가 그린 뒤 스스로 비운다. 월드 바깥(엔진 루프의 AABB 디버그 라인 등)에서도
 	// 채워지므로 여기서 Reset 하면 남의 것까지 날린다. 메시/픽킹 배열만 여기서 갈아끼운다.
 	outCollector.RenderInfos.Reset(DEFAULT_RESERVE_MEM);

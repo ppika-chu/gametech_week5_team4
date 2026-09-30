@@ -48,7 +48,7 @@ bool FMeshBVH::RayCast(const FVector& LocalOrigin, const FVector& LocalDir, floa
 {
     if (RootIndex < 0) return false;
     
-    const FRay LocalRay(LocalOrigin, LocalDir);
+    const FRaySIMD LocalRay(FRay(LocalOrigin, LocalDir));
     bool bHit = false;
 
     int32 Stack[MaxStackDepth];

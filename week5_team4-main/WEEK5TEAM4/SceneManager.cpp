@@ -39,6 +39,7 @@
 
 #include "OptimizationFlags.h"
 #include <tracy/Tracy.hpp>
+#include "FScopeCycleCounter.h"
 
 FSceneManager::FSceneManager()
 {
@@ -509,8 +510,24 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			const float ShownFPS = SmoothFrameMs > 0.f ? 1000.0f / SmoothFrameMs : 0.f;
 			const float ShownCpuMs = (std::max)(SmoothFrameMs - SmoothGpuMs, 0.f);
 
-			ImGui::Text("FPS: %.1f", ShownFPS);
-			ImGui::Text("Frame Time: %.2f ms", SmoothFrameMs);
+			// 순간값: 직전 한 프레임의 시간만으로 계산 (매 프레임 흔들림, 비교용)
+			ImGui::Text("FPS (Tick): %.1f", guiReference.FrameTimer->GetFPS());
+			ImGui::Text("Frame Time (Tick): %.2f ms", FrameTimeMs);
+
+			// 지수 이동 평균: 매 프레임 부드럽게 따라가는 화면 표시용 값
+			ImGui::Text("FPS (EMA): %.1f", ShownFPS);
+			ImGui::Text("Frame Time (EMA): %.2f ms", SmoothFrameMs);
+
+			// 구간 평균: 0.5초 동안 실제로 그린 프레임 수 기준. 측정/비교용 값
+			const FFrameTimer* Timer = guiReference.FrameTimer;
+			ImGui::Text("FPS (0.5s Avg): %.1f", Timer->GetIntervalAverageFPS());
+			ImGui::Text("Frame Time (0.5s Avg): %.2f ms", Timer->GetIntervalAverageFrameMs());
+			ImGui::Text("Frame Min / Max: %.2f / %.2f ms", Timer->GetIntervalMinFrameMs(), Timer->GetIntervalMaxFrameMs());
+
+			// 해상도: 창(백버퍼) 전체와 3D 씬이 그려지는 뷰포트 영역
+			const URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			ImGui::Text("Window: %u x %u", Renderer->GetWidth(), Renderer->GetHeight());
+			ImGui::Text("Viewport: %.0f x %.0f", mViewportWidth, mViewportHeight);
 			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
 			// CPU / GPU
@@ -538,7 +555,8 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::PopStyleColor();
 			
 			ImGui::Text("Picking Count: %llu", guiReference.ViewportClient->GetPickAttemptCount());
-			ImGui::Text("Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
+			ImGui::Text("Last Ray Test Count: %llu", guiReference.ViewportClient->GetLastPickTestCount());
+			ImGui::Text("Accumulated Ray Test Count: %llu", guiReference.ViewportClient->GetPickTestCount());
 			ImGui::Text("Last Picking Time: %.2f ms", guiReference.ViewportClient->GetPickLastTimeMs());
 			ImGui::Text("Accumulated Picking Time: %.2f ms", guiReference.ViewportClient->GetPickAccumulatedTimeMs());
 			
@@ -549,7 +567,30 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::Text("GPU call Count: %llu", guiReference.GraphicsManager->GetRenderer()->GetDrawCallCount());
 			ImGui::Text("Drawn Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetDrawnObjCount());
 			ImGui::Text("Culled Obj Count: %u", guiReference.GraphicsManager->GetRenderCollector().GetCulledObjCount());
-			
+
+			// Stats: FScopeCycleCounter로 측정한 구간별 시간 (등록 순서대로)
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.0f, 0.35f, 1.0f));
+			ImGui::SeparatorText("Stats");
+			ImGui::PopStyleColor();
+			for (const FStatEntry* Entry : FStatRegistry::Get().GetOrderedEntries())
+			{
+				const FString EntryName = Entry->Name.ToString();
+				// 연속 2프레임 이상 실행된 구간만 매 프레임 구간으로 본다.
+				// (피킹처럼 가끔 실행되는 구간이 실행 직후 한 프레임만 형식이 바뀌는 것을 막는다)
+				if (Entry->ActiveFrameStreak >= 2)
+				{
+					// 매 프레임 실행되는 구간: 직전 프레임에 쓴 시간
+					ImGui::Text("%s: %.2f ms/frame", EntryName.CStr(), FPlatformTime::ToMilliseconds(Entry->LastFrameCycles));
+				}
+				else if (Entry->CallCount > 0)
+				{
+					// 가끔 실행되는 구간(피킹 등): 마지막 1회와 평균
+					const double AvgMs = FPlatformTime::ToMilliseconds(Entry->TotalCycles) / static_cast<double>(Entry->CallCount);
+					ImGui::Text("%s: last %.3f ms | avg %.3f ms (%llu calls)", EntryName.CStr(),
+						FPlatformTime::ToMilliseconds(Entry->LastCycles), AvgMs, Entry->CallCount);
+				}
+			}
+
 			ImGui::PopStyleColor();
 			ImGui::PopFont();
 			ImGui::End();
@@ -785,12 +826,12 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			}
 		}
 
-		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 5.0f, 150.0f);
+		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 0.0f, 150.0f);
 
 		if (ImGui::Button("All on"))
 		{
 			GCullingMode = ECullingMode::BVH;
-			GPickingMode = EPickingMode::BVHFrustum;
+			GPickingMode = EPickingMode::BVH;
 			for (bool& b : GOptEnabled) { b = true; }
 		}
 		ImGui::SameLine();

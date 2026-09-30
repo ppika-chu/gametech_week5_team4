@@ -209,13 +209,13 @@ void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimi
 }
 
 // Picking 용 (Ray와 가장 가까운 Component 반환)
-UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount, const FFrustum* Frustum) const
+UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const
 {
     if (RootIndex < 0) return nullptr;
     
     UPrimitiveComponent* NearestComponent = nullptr;
     float NearestT = Ray.Length;
-    FRay AABBRay = Ray.ToRay();
+    const FRaySIMD RaySIMD(Ray.ToRay());   // 피킹 한 번에 나눗셈 3번으로 끝
 
 
     TArray<int32> Stack;
@@ -228,7 +228,7 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
         const FNode& CurrentNode = Nodes[CurrentIndex];
         float Enter;
 
-        if (!RayIntersectsAABB(AABBRay, NearestT, CurrentNode.Bounds, Enter)) continue;
+        if (!RayIntersectsAABB(RaySIMD, NearestT, CurrentNode.Bounds, Enter)) continue;
         if (CurrentNode.Left < 0)
         {
             for (UPrimitiveComponent* Item : CurrentNode.Items)
@@ -236,18 +236,17 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
                 // 레이가 이 아이템의 박스를 안 지나가거나,
                 // 지나가더라도 지금까지 찾은 가장 가까운 물체(NearestT)보다 뒤에 있으면 건너뛴다
                 float ItemEnter;
-                if (!RayIntersectsAABB(Ray.ToRay(), NearestT, Item->GetBoundingBox(), ItemEnter))
+                if (!RayIntersectsAABB(RaySIMD, NearestT, Item->GetBoundingBox(), ItemEnter))
                     continue;
 
-                // 화면에서 안 보이는 건 피킹 후보 제외
-                if (Frustum && !Frustum->Intersects(Item->GetBoundingBox()))
-                    continue;
+                // 프러스텀 검사는 하지 않는다. 피킹 레이(Near~Far)는 전부 프러스텀 안에 있으므로
+                // 위에서 Ray-AABB를 통과했으면 프러스텀과도 반드시 겹친다.
 
                 // Picking Test count ++
                 if (OutTestCount) ++(*OutTestCount);
 
                 float HitT = FLT_MAX;
-                if (Item->RayCastComponent(Ray, HitT) && HitT < NearestT)
+                if (Item->RayCastComponent(Ray, NearestT, HitT) && HitT < NearestT)
                 {
                     NearestT = HitT;
                     NearestComponent = Item;
@@ -259,8 +258,8 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
         {
             // 두 자식 박스에 레이가 들어가는 거리를 구한다 (NearestT보다 멀면 miss)
             float LeftEnter, RightEnter;
-            const bool bHitLeft = RayIntersectsAABB(Ray.ToRay(), NearestT, Nodes[CurrentNode.Left].Bounds, LeftEnter);
-            const bool bHitRight = RayIntersectsAABB(Ray.ToRay(), NearestT, Nodes[CurrentNode.Right].Bounds, RightEnter);
+            const bool bHitLeft = RayIntersectsAABB(RaySIMD, NearestT, Nodes[CurrentNode.Left].Bounds, LeftEnter);
+            const bool bHitRight = RayIntersectsAABB(RaySIMD, NearestT, Nodes[CurrentNode.Right].Bounds, RightEnter);
 
             if (bHitLeft && bHitRight)
             {
