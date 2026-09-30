@@ -249,7 +249,7 @@ class UText3DComponent : public USceneComponent
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
 
 public:
-	UText3DComponent() { SetEverTick(); }
+	UText3DComponent() { }
 
 	void SerializeClass(json::JSON& outJson) const override
 	{
@@ -276,16 +276,16 @@ public:
 		}
 	}
 
-	void Tick(float DeltaTime) override
-	{
-		if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
-		{
-			return;
-		}
-		// NOTE: Text3DComponent의 위치와 회전을 부모 액터에 맞춘다. 현재 Hierarchy 매트릭스 구현이 없으므로 부모 액터의 위치와 회전만 가져와서 적용한다.
-		FTransform ParentTransform = mOwner->GetTransform();
-		SetRelativeLocation(ParentTransform.Location + FVector(0.f, 0.f, 1.f));
-	}
+	//void Tick(float DeltaTime) override
+	//{
+	//	if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
+	//	{
+	//		return;
+	//	}
+	//	// NOTE: Text3DComponent의 위치와 회전을 부모 액터에 맞춘다. 현재 Hierarchy 매트릭스 구현이 없으므로 부모 액터의 위치와 회전만 가져와서 적용한다.
+	//	FTransform ParentTransform = mOwner->GetTransform();
+	//	SetRelativeLocation(ParentTransform.Location + FVector(0.f, 0.f, 1.f));
+	//}
 
 	void Render(FRenderCollector& RenderCollector, const FAABB& WorldBounds) override
 	{
@@ -295,6 +295,8 @@ public:
 		{
 			return;
 		}
+		FTransform ParentTransform = mOwner->GetTransform();
+		SetRelativeLocation(ParentTransform.Location + FVector(0.f, 0.f, 1.f));
 
 		if (!mFontAtlasAsset)
 		{

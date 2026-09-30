@@ -56,7 +56,7 @@ private:
     void SplitLeaf(int32 LeafIndex);
 
     // TODO : 최적의 leaf size인지는 모름. Test 필요
-    static constexpr int32 LeafSize = 4;
+    static constexpr int32 LeafSize = 16;
     TArray<FNode> Nodes;
     TMap<UPrimitiveComponent*, int32> ComponentToLeaf;  // <Component-Leaf Node Idx>
     int32 RootIndex = -1;
