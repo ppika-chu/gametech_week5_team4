@@ -12,6 +12,7 @@
 #include "JsonUtil.h"
 #include "FTextBuilder.h"
 #include "EngineMathLibrary.h"
+#include "OptimizationFlags.h"
 
 class UPlaneComponent : public UPrimitiveComponent
 {
@@ -20,6 +21,7 @@ class UPlaneComponent : public UPrimitiveComponent
 public:
 	UPlaneComponent()
 	{
+		SetEverTick();
 		mMeshAsset = FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(FName("PlaneMesh"), true);
 	}
 
@@ -71,7 +73,8 @@ public:
 			return;
 		}
 
-		if (RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
+		// Linear 모드에서만 여기서 컬링한다. BVH 모드는 QueryFrustum에서 이미 아이템 단위까지 걸러서 넘겨준다.
+		if (GCullingMode == ECullingMode::Linear && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
 		{
 			++RenderCollector.CulledObjectCount;
 			return;
@@ -152,6 +155,7 @@ class USpotLightComponent : public USceneComponent
 	REFLECT_CLASS(USpotLightComponent, USceneComponent)
 
 public:
+	USpotLightComponent() { SetEverTick(); }
 	void Tick(float DeltaTime) override
 	{
 		// NOTE: SpotLightComponent의 위치와 회전을 부모 액터에 맞춘다. 현재 Hierarchy가 없으므로 부모 액터의 위치와 회전만 가져와서 적용한다.
@@ -245,7 +249,7 @@ class UText3DComponent : public USceneComponent
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
 
 public:
-	UText3DComponent() = default;
+	UText3DComponent() { SetEverTick(); }
 
 	void SerializeClass(json::JSON& outJson) const override
 	{
@@ -274,6 +278,10 @@ public:
 
 	void Tick(float DeltaTime) override
 	{
+		if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
+		{
+			return;
+		}
 		// NOTE: Text3DComponent의 위치와 회전을 부모 액터에 맞춘다. 현재 Hierarchy 매트릭스 구현이 없으므로 부모 액터의 위치와 회전만 가져와서 적용한다.
 		FTransform ParentTransform = mOwner->GetTransform();
 		SetRelativeLocation(ParentTransform.Location + FVector(0.f, 0.f, 1.f));

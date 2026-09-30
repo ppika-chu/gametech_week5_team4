@@ -21,7 +21,7 @@ public:
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
 
-	void AddComponent(UActorComponent* actorComponent);
+	void AddComponent(UActorComponent* actorComponent); // 월드에 들어간 뒤 추가하면 틱 등록이 안 됨
 	void AddRootSceneComponent(USceneComponent* sceneComponent);
 	USceneComponent* GetRootComponent() const;
 	bool RemoveComponent(uint32 componentUUID);

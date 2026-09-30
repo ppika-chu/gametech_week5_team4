@@ -146,6 +146,11 @@ Microsoft::WRL::ComPtr<ID3D11Buffer> FStaticMeshAsset::GetVertexBuffer() const
 	return VertexBuffer->Buffer;
 }
 
+ID3D11Buffer* FStaticMeshAsset::GetVertexBufferRaw() const
+{
+	return VertexBuffer->Buffer.Get();
+}
+
 uint32 FStaticMeshAsset::GetVertexCount() const
 {
 	return VertexBuffer->VertexCount;
@@ -154,6 +159,11 @@ uint32 FStaticMeshAsset::GetVertexCount() const
 Microsoft::WRL::ComPtr<ID3D11Buffer> FStaticMeshAsset::GetIndexBuffer() const
 {
 	return IndexBuffer->Buffer;
+}
+
+ID3D11Buffer* FStaticMeshAsset::GetIndexBufferRaw() const
+{
+	return IndexBuffer->Buffer.Get();
 }
 
 uint32 FStaticMeshAsset::GetIndexCount() const

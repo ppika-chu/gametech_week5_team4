@@ -89,7 +89,10 @@ void UWorld::AddActor(AActor* actor)
 	for (UActorComponent* Component : actor->GetComponents())
 	{
 		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+		{
 			mBVH.Insert(Primitive);
+		}
+		RegisterTick(Component);
 	}
 }
 
@@ -105,7 +108,10 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 	for (UActorComponent* Component : actor->GetComponents())
 	{
 		if (UPrimitiveComponent* Primitive = Component->Cast<UPrimitiveComponent>())
+		{
 			mBVH.Remove(Primitive);
+		}
+		UnregisterTick(Component);
 	}
 
 	//mActors.RemoveAt(componentIndex, 1);
@@ -116,10 +122,35 @@ bool UWorld::RemoveActor(uint32 componentUUID)
 
 void UWorld::Tick(float deltaTime)
 {
-	for (AActor* actor : mActors)
+	for (UActorComponent* ActorComponent : TickComponents)
 	{
-		actor->Tick(deltaTime);
+		ActorComponent->Tick(deltaTime);
 	}
+}
+
+void UWorld::RegisterTick(UActorComponent* Component)
+{
+	// bCanEverTick && bTickEnabled && 미등록이면 추가
+
+	if (Component->IsActiveTick() && Component->GetTickListIndex() == -1)
+	{
+		Component->SetTickListIndex(TickComponents.Num());
+		TickComponents.Add(Component);
+	}
+}
+
+void UWorld::UnregisterTick(UActorComponent* Component)
+{
+	if (Component->GetTickListIndex() == -1)
+		return;
+
+	int32 Index = Component->GetTickListIndex();
+	UActorComponent* LastComponent = TickComponents.Last();
+
+	TickComponents[Index] = LastComponent;
+	LastComponent->SetTickListIndex(Index);
+	TickComponents.RemoveLast();
+	Component->SetTickListIndex(-1);
 }
 
 void UWorld::Render(float deltaTime, FRenderCollector& outCollector)

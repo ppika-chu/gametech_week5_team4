@@ -28,6 +28,12 @@ public:
 	virtual FAABB GetBoundingBox() const;
 	virtual void GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const;
 
+	void SetEverTick();
+	void SetTickEnabled(bool NewStatus);
+	bool IsActiveTick() const;
+	void SetTickListIndex(int32 NewIndex);
+	int32 GetTickListIndex() const;
+
 	// 이 컴포넌트가 마우스 픽킹 대상이면 컬렉터에 자신을 등록한다.
 	// 기본은 등록하지 않는다. 충돌체가 있는 컴포넌트만 재정의한다.
 	virtual void RegisterPickTarget(FRenderCollector& RenderCollector, const FAABB& AABB);
@@ -65,5 +71,9 @@ protected:
 
 private:
 	uint32 mComponentFlags = 0;
+	bool bCanEverTick = false;
+	bool bTickEnabled = true;
+	// 틱 목록 안의 위치. -1이면 등록 안 됨
+	int32 TickListIndex = -1;
 };
 

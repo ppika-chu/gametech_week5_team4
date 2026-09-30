@@ -511,16 +511,20 @@ public:
 	mutable uint64 DrawCallCount = 0;
 
 	uint64 GetDrawCallCount() const { return DrawCallCount; }
-	void ResetDrawCallCount()
-	{
-		DrawCallCount = 0;
 
+	void InvalidateBindingCache()
+	{ 
 		LastBoundPipeline = nullptr;
 		LastBoundViewMode = static_cast<EViewModeIndex>(-1);
 		LastBoundStencilRef = 0xFFFFFFFFu;
 		LastBoundSRV0 = nullptr;
 		LastVertexBuffer = nullptr;
 		LastIndexBuffer = nullptr;
+	}
+
+	void ResetDrawCallCount()
+	{
+		DrawCallCount = 0;
 	}
 private:
 	void CreateDeviceAndSwapChain(HWND hWindow);

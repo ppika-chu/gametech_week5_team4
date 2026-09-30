@@ -4,6 +4,7 @@
 UAtlasAnimationComponent::UAtlasAnimationComponent()
 {
 	mBlendMode = ERenderBlendMode::Additive;
+	SetEverTick();
 }
 
 void UAtlasAnimationComponent::Initialize(EPrimitive PrimitiveType, const TSharedPtr<FSpriteAtlasAsset>& textureAsset)

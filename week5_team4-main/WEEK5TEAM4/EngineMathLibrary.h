@@ -222,7 +222,7 @@ inline bool RayIntersectsTriangle(const FVector& Origin, const FVector& Dir, con
 	// OutU, OutV 정확환 클릭지점을 확인하려면 필요
 }
 
-inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB)
+inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB, float& OutEnter)
 {
 	if (Distance < 0.f)	return false;
 
@@ -242,14 +242,24 @@ inline bool RayIntersectsAABB(const FRay& Ray, float Distance, const FAABB& AABB
 
 	float Enter = (std::max)({0.f, MinArr[0], MinArr[1], MinArr[2]});
 	float Exit = (std::min)({Distance, MaxArr[0], MaxArr[1], MaxArr[2]});
-	
+	OutEnter = Enter;
+
 	return Enter <= Exit;
 }
 
-struct FFrustum
+struct  alignas(16) FFrustum
 {
 	// Left, Right, Bottom, Top, Near, Far
 	FVector4 Planes[6];
+
+	__m128 PlaneX[2];
+	__m128 PlaneY[2];
+	__m128 PlaneZ[2];
+	__m128 PlaneW[2];
+
+	__m128 AbsPlaneX[2];
+	__m128 AbsPlaneY[2];
+	__m128 AbsPlaneZ[2];
 
 	// Frustum 각 평면의 A,B,C,D 저장
 	static FFrustum FromViewProjection(const FMatrix& VP)
@@ -259,6 +269,119 @@ struct FFrustum
 		{
 			return FVector4(VP.M[0][k], VP.M[1][k], VP.M[2][k], VP.M[3][k]);
 		};
+
+		const FVector4 Col0 = Col(0);
+		const FVector4 Col1 = Col(1);
+		const FVector4 Col2 = Col(2);
+		const FVector4 Col3 = Col(3);
+
+		FFrustum F{};
+
+		F.Planes[0] = Col0 + Col3;
+		F.Planes[1] = Col3 - Col0;
+		F.Planes[2] = Col1 + Col3;
+		F.Planes[3] = Col3 - Col1;
+		F.Planes[4] = Col2;			// -w 가 0 이므로 
+		F.Planes[5] = Col3 - Col2;
+
+		// 첫 번째 그룹: Left, Right, Bottom, Top.
+		F.PlaneX[0] = _mm_setr_ps(F.Planes[0].x, F.Planes[1].x,	F.Planes[2].x, F.Planes[3].x);
+		F.PlaneY[0] = _mm_setr_ps(F.Planes[0].y, F.Planes[1].y, F.Planes[2].y, F.Planes[3].y);
+		F.PlaneZ[0] = _mm_setr_ps(F.Planes[0].z, F.Planes[1].z, F.Planes[2].z, F.Planes[3].z);
+		F.PlaneW[0] = _mm_setr_ps(F.Planes[0].w, F.Planes[1].w, F.Planes[2].w, F.Planes[3].w);
+
+		// 두 번째 그룹: Near, Far, Dummy, Dummy.
+		// Dummy plane의 모든 계수가 0이므로 항상 판정을 통과
+		F.PlaneX[1] = _mm_setr_ps(F.Planes[4].x, F.Planes[5].x, 0.0f, 0.0f);
+		F.PlaneY[1] = _mm_setr_ps(F.Planes[4].y, F.Planes[5].y,	0.0f, 0.0f);
+		F.PlaneZ[1] = _mm_setr_ps(F.Planes[4].z, F.Planes[5].z, 0.0f, 0.0f);
+		F.PlaneW[1] = _mm_setr_ps(F.Planes[4].w, F.Planes[5].w, 0.0f, 0.0f);
+
+		// andnot을 사용하면 float 절댓값을 구할 수 있다.
+		const __m128 SignMask = _mm_set1_ps(-0.0f);
+
+		for (int32 Group = 0; Group < 2; ++Group)
+		{
+			F.AbsPlaneX[Group] = _mm_andnot_ps(SignMask, F.PlaneX[Group]);
+			F.AbsPlaneY[Group] = _mm_andnot_ps(SignMask, F.PlaneY[Group]);
+			F.AbsPlaneZ[Group] = _mm_andnot_ps(SignMask, F.PlaneZ[Group]);
+		}
+
+		return F;
+	}
+
+	inline bool Intersects(const FAABB& AABB) const
+	{
+
+
+		const __m128 CenterX = _mm_set1_ps((AABB.Min.x + AABB.Max.x) * 0.5f);
+		const __m128 CenterY = _mm_set1_ps((AABB.Min.y + AABB.Max.y) * 0.5f);
+		const __m128 CenterZ = _mm_set1_ps((AABB.Min.z + AABB.Max.z) * 0.5f);
+
+		// AABB extent도 각각 네 SIMD lane에 복제한다.
+		const __m128 ExtentX = _mm_set1_ps((AABB.Max.x - AABB.Min.x) * 0.5f);
+		const __m128 ExtentY = _mm_set1_ps((AABB.Max.y - AABB.Min.y) * 0.5f);
+		const __m128 ExtentZ = _mm_set1_ps((AABB.Max.z - AABB.Min.z) * 0.5f);
+
+		const __m128 Zero = _mm_setzero_ps();
+
+		// Group 0에서 Left/Right/Bottom/Top을 동시에 검사하고,
+		// Group 1에서 Near/Far/Dummy/Dummy를 동시에 검사한다.
+		for (int32 Group = 0; Group < 2; ++Group)
+		{
+			// Distance =
+			// Nx * CenterX +
+			// Ny * CenterY +
+			// Nz * CenterZ +
+			// D
+			__m128 Distance = _mm_mul_ps(PlaneX[Group],	CenterX);
+
+			Distance = _mm_add_ps(Distance,	_mm_mul_ps(PlaneY[Group], CenterY));
+			Distance = _mm_add_ps(Distance,	_mm_mul_ps(PlaneZ[Group], CenterZ));
+			Distance = _mm_add_ps(Distance,	PlaneW[Group]);
+
+			// Radius =
+			// abs(Nx) * ExtentX +
+			// abs(Ny) * ExtentY +
+			// abs(Nz) * ExtentZ
+			__m128 Radius = _mm_mul_ps(AbsPlaneX[Group], ExtentX);
+
+			Radius = _mm_add_ps(Radius,	_mm_mul_ps(AbsPlaneY[Group], ExtentY));
+
+			Radius = _mm_add_ps(Radius,	_mm_mul_ps(AbsPlaneZ[Group], ExtentZ));
+
+			// 기존 판정식:
+			//     Distance + Radius < 0
+			//
+			// 네 평면 중 하나라도 true이면 해당 AABB는
+			// Frustum 바깥에 있으므로 즉시 탈락한다.
+			const __m128 Outside = _mm_cmplt_ps(_mm_add_ps(Distance, Radius), Zero);
+
+			if (_mm_movemask_ps(Outside) != 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+};
+
+
+/*struct FFrustum
+{
+	// Left, Right, Bottom, Top, Near, Far
+	FVector4 Planes[6];
+
+	// Frustum 각 평면의 A,B,C,D 저장
+	static FFrustum FromViewProjection(const FMatrix& VP)
+	{
+		// VP 행렬에서 k열 반환
+		auto Col = [&VP](int32 k)
+			{
+				return FVector4(VP.M[0][k], VP.M[1][k], VP.M[2][k], VP.M[3][k]);
+			};
 
 		const FVector4 Col0 = Col(0);
 		const FVector4 Col1 = Col(1);
@@ -276,13 +399,48 @@ struct FFrustum
 		return F;
 	}
 
+	enum class EFrustumTestResult { Outside, Inside, Intersect };
+
+	EFrustumTestResult ClassifyAABB(const FAABB& AABB, uint32& PlaneMask) const
+	{
+		FVector Center;
+		FVector Extent;
+
+		Center = (AABB.Max + AABB.Min) * 0.5f;
+		Extent = (AABB.Max - AABB.Min) * 0.5f;
+
+		for (int32 i = 0; i < 6; i++)
+		{
+			if ((PlaneMask & (1u << i)) == 0)
+			{
+				continue;
+			}
+
+			const FVector4& Plane = Planes[i];
+
+			float Distance = Plane.x * Center.x + Plane.y * Center.y + Plane.z * Center.z + Plane.w;
+			float ProjectedExtent = FMath::Abs(Plane.x) * Extent.x
+				+ FMath::Abs(Plane.y) * Extent.y
+				+ FMath::Abs(Plane.z) * Extent.z;
+
+			if (Distance < -ProjectedExtent)
+				return (EFrustumTestResult::Outside);
+			else if (Distance > ProjectedExtent)
+				PlaneMask &= ~(1u << i);
+		}
+		if (PlaneMask == 0)
+			return (EFrustumTestResult::Inside);
+
+		return (EFrustumTestResult::Intersect);
+	}
+
 	inline bool Intersects(const FAABB& AABB) const
 	{
 		// 각 축의 중심
-		__m128 Center = _mm_set_ps(1.f, (AABB.Min.z+AABB.Max.z)*0.5f, (AABB.Min.y+AABB.Max.y)*0.5f, (AABB.Min.x+AABB.Max.x)*0.5f);
+		__m128 Center = _mm_set_ps(1.f, (AABB.Min.z + AABB.Max.z) * 0.5f, (AABB.Min.y + AABB.Max.y) * 0.5f, (AABB.Min.x + AABB.Max.x) * 0.5f);
 
 		// 각 축의 뻗어나가는 방향
-		__m128 Extent = _mm_set_ps(0.f, (AABB.Max.z-AABB.Min.z)*0.5f, (AABB.Max.y-AABB.Min.y)*0.5f, (AABB.Max.x-AABB.Min.x)*0.5f);
+		__m128 Extent = _mm_set_ps(0.f, (AABB.Max.z - AABB.Min.z) * 0.5f, (AABB.Max.y - AABB.Min.y) * 0.5f, (AABB.Max.x - AABB.Min.x) * 0.5f);
 
 		for (const FVector4& P : Planes)
 		{
@@ -297,9 +455,9 @@ struct FFrustum
 			float Dist = DistArr[0] + DistArr[1] + DistArr[2] + DistArr[3];
 			float Radius = RadArr[0] + RadArr[1] + RadArr[2];
 
-		// 이 평면의 가장 유리한 꼭짓점조차 Frustum 바깥에 있으므로 false
+			// 이 평면의 가장 유리한 꼭짓점조차 Frustum 바깥에 있으므로 false
 			if (Dist + Radius < 0.f) return false;
 		}
 		return true;
 	}
-};
+};*/

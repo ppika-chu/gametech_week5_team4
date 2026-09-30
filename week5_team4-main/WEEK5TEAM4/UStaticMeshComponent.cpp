@@ -79,6 +79,8 @@ void UStaticMeshComponent::DeserializeClass(const json::JSON& inJson)
 		JsonUtils::FromJson(PropertiesJson.at("UVOffsets"), UVOffsets);
 	}
 
+    RebuildSectionTextures();
+
 	for (int32 i = 0; i < UVOffsets.Num(); ++i)
 	{
 		if (i >= mUVOffsets.Num())
@@ -104,8 +106,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
 
 
     // Frustum Culling
-    // BVH 모드에서도 남겨둔다. BVH는 리프(4개 묶음) 단위라 경계에 걸친 것은 여기서 정밀하게 걸러진다.
-    if (GCullingMode != ECullingMode::Off
+    // Linear 모드에서만 여기서 컬링한다. BVH 모드는 QueryFrustum에서 이미 아이템 단위까지 걸러서 넘겨준다.
+    if (GCullingMode == ECullingMode::Linear
         && RenderCollector.Frustum && !RenderCollector.Frustum->Intersects(WorldBounds))
     {
         ++RenderCollector.CulledObjectCount;
@@ -113,8 +115,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
     }
 
     const TArray<FStaticMeshSection>* SectionsToUse = &mMeshAsset->GetSections();
-    Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBufferToUse = mMeshAsset->GetVertexBuffer();
-    Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBufferToUse = mMeshAsset->GetIndexBuffer();
+    ID3D11Buffer* VertexBufferToUse = mMeshAsset->GetVertexBufferRaw();
+    ID3D11Buffer* IndexBufferToUse = mMeshAsset->GetIndexBufferRaw();
 
     // 너무 작은 픽셀은 LOD
     if (RenderCollector.Camera && IsOptEnabled(EOptFlag::LOD))
@@ -131,8 +133,8 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
             {
                 const FMeshLOD& LOD = mMeshAsset->GetLOD(i);
                 SectionsToUse = &LOD.Sections;
-                VertexBufferToUse = LOD.VertexBuffer->Buffer;
-                IndexBufferToUse = LOD.IndexBuffer->Buffer;
+                VertexBufferToUse = LOD.VertexBuffer->Buffer.Get();
+                IndexBufferToUse = LOD.IndexBuffer->Buffer.Get();
             }   
         }
     }
@@ -144,7 +146,7 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
     {
         const FStaticMeshSection& Section = (*SectionsToUse)[SectionIndex];
 
-        TSharedPtr<FMaterialAsset> Material = mMaterialAssets[SectionIndex];
+        TSharedPtr<FMaterialAsset>& Material = mMaterialAssets[SectionIndex];
 
         const FVector4 MaterialColor = Material
             ? FVector4(
@@ -154,30 +156,17 @@ void UStaticMeshComponent::Render(FRenderCollector& RenderCollector, const FAABB
                 Material->GetOpacity())
             : FVector4(1, 1, 1, 1);
 
-        TSharedPtr<FTexture2DAsset> SectionTexture = Material ? Material->GetDiffuseTexture() : nullptr;
-
-        if (!SectionTexture && StaticMesh)
-        {
-            SectionTexture = StaticMesh->GetDiffuseTexture(Section.MaterialName);
-        }
-        if (!SectionTexture)
-        {
-            SectionTexture = mTextureAsset;
-        }
-
-        FRenderInfo RenderInfo;
+        FRenderInfo& RenderInfo = RenderCollector.RenderInfos.Emplace();
         RenderInfo.VertexBuffer = VertexBufferToUse;
         RenderInfo.IndexBuffer = IndexBufferToUse;
         RenderInfo.StartIndex = Section.FirstIndex;
         RenderInfo.IndexCount = Section.IndexCount;
-        RenderInfo.Texture = SectionTexture;
+        RenderInfo.Texture = mSectionTextures[SectionIndex].get();
         RenderInfo.UVOffset = mUVOffsets[SectionIndex];
         RenderInfo.Model = GetCacheWorldMatrix();
         RenderInfo.Color = Material ? MaterialColor : Color;
         RenderInfo.UseVertexColor = Material == nullptr;
         RenderInfo.ObjectInternalIndex = mOwner->InternalIndex;
-
-        RenderCollector.RenderInfos.Add(std::move(RenderInfo));
     }
 }
 
@@ -188,7 +177,41 @@ FAABB UStaticMeshComponent::GetBoundingBox() const
         return FAABB();
     }
 
-    return mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix());
+    // 캐싱을 끄면 매번 다시 계산한다 (비교 측정용).
+    if (IsWorldAABBDirty() || !IsOptEnabled(EOptFlag::TransformCache))
+    {
+        SetCacheWorldAABB(mMeshAsset->GetLocalBoundingBox().ToWorld(GetCacheWorldMatrix()));
+    }
+    return GetCacheWorldAABB();
+}
+
+void UStaticMeshComponent::RebuildSectionTextures()
+{
+    if (mMeshAsset == nullptr)
+    {
+        mSectionTextures.Empty();
+        return;
+    }
+
+    mSectionTextures.SetNum(mMeshAsset->GetSections().Num());
+
+    for (int32 SectionIndex = 0; SectionIndex < mMeshAsset->GetSections().Num(); ++SectionIndex)
+    {
+        auto& Section = mMeshAsset->GetSections()[SectionIndex];
+
+        const TSharedPtr<FMaterialAsset>& Material = mMaterialAssets[SectionIndex];
+        TSharedPtr<FTexture2DAsset> SectionTexture = Material ? Material->GetDiffuseTexture() : nullptr;
+
+        if (!SectionTexture && StaticMesh)
+        {
+            SectionTexture = StaticMesh->GetDiffuseTexture(Section.MaterialName);
+        }
+        if (!SectionTexture)
+        {
+            SectionTexture = mTextureAsset;
+        }
+        mSectionTextures[SectionIndex] = SectionTexture;
+    }
 }
 
 void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
@@ -198,6 +221,8 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
 		mMeshAsset = nullptr;
 		mMaterialAssets.Empty();
 		mUVOffsets.Empty();
+        MarkWorldAABBDirty();
+        RebuildSectionTextures();
 		return;
     }
 
@@ -210,4 +235,6 @@ void UStaticMeshComponent::SetMesh(const TSharedPtr<FStaticMeshAsset>& InMesh)
         mMaterialAssets[i] = FAssetManager::Get().GetAssetAs<FMaterialAsset>(Section.MaterialAssetID, true);
     }
     mMeshAsset = InMesh;
+    MarkWorldAABBDirty();
+    RebuildSectionTextures();
 }
