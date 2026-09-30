@@ -61,11 +61,13 @@ project "WEEK5TEAM4"
 
     filter "configurations:Release"
         runtime "Release"
-        optimize "Off"
+        optimize "Speed"
         symbols "On"
-        defines { "TRACY_ENABLE" }
-        links { 
-            "freetype" 
+        floatingpoint "Fast"
+        vectorextensions "AVX2"
+        linktimeoptimization "On"
+        links {
+            "freetype"
         }
 
     filter "configurations:ObjViewerRelease"

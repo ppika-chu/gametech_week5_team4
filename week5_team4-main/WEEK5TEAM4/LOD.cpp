@@ -6,6 +6,7 @@
 #include <queue>
 #include <utility>
 #include <set>
+#include <map>
 
 struct FQuadric
 {
@@ -88,6 +89,60 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
         Quadrics[i2].AddPlane(P2, Normal);
     }
     
+    // 1.5. 경계 엣지 탐지
+    {
+        std::map<std::pair<uint32,uint32>, int32> EdgeUseCount;
+        for (int t = 0; t < TriCount; ++t)
+        {
+            uint32 Tri[3] = { Indices[t*3+0], Indices[t*3+1], Indices[t*3+2] };
+            for (int32 k = 0; k < 3; ++k)
+            {
+                uint32 A = Tri[k], B = Tri[(k+1)%3];
+                if (A>B) std::swap(A, B);
+                ++EdgeUseCount[{A, B}];
+            }
+        }
+        
+        constexpr float BoundaryWeight = 400.0f;
+        for (int t = 0; t < TriCount; ++t)
+        {
+            uint32 Tri[3] = { Indices[t*3+0], Indices[t*3+1], Indices[t*3+2] };
+            const FVector P0 = Verts[Tri[0]].Pos, P1 = Verts[Tri[1]].Pos, P2 = Verts[Tri[2]].Pos;
+            FVector FaceNormal = FVector::cross(P1-P0, P2-P0);
+            float FaceLen = FaceNormal.Length();
+            if (FaceLen < 1e-8f) continue;
+            FaceNormal *= (1.0f/FaceLen);
+
+            for (int32 k=0; k<3; ++k)
+            {
+                uint32 A = Tri[k], B = Tri[(k+1)%3];
+                uint32 EdgeA = A, EdgeB = B;
+                if (EdgeA>EdgeB) std::swap(EdgeA,EdgeB);
+                if (EdgeUseCount[{EdgeA, EdgeB}]!=1) continue;
+                
+                const FVector& PA = Verts[A].Pos;
+                const FVector& PB = Verts[B].Pos;
+                FVector EdgeDir = PB - PA;
+                float EdgeLen = EdgeDir.Length();
+                if (EdgeLen < 1e-8f) continue;
+                EdgeDir *= (1.0f/EdgeLen);
+
+                FVector ConstraintNormal = FVector::cross(EdgeDir, FaceNormal);
+                float ConstraintLen = ConstraintNormal.Length();
+                if (ConstraintLen < 1e-8f) continue;
+                ConstraintNormal *= (1.0f / ConstraintLen);
+
+                // Quadrics에 가중치 넣어서 에러값 비싸게.
+                FQuadric BoundaryQ;
+                BoundaryQ.AddPlane(PA, ConstraintNormal);
+                for (int32 i = 0; i < 10; ++i) BoundaryQ.q[i] *= BoundaryWeight;
+
+                Quadrics[A] = Quadrics[A] + BoundaryQ;
+                Quadrics[B] = Quadrics[B] + BoundaryQ;
+            }
+        }
+    }
+
     // 2. 정점별 인접 삼각형 목록
     TArray<TArray<int32>> VertTris;
     VertTris.SetNum(VertCount);
@@ -121,6 +176,49 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
     auto Cmp = [](const FCandidate& L, const FCandidate& R) { return L.Cost > R.Cost; };
 
     std::priority_queue<FCandidate, std::vector<FCandidate>, decltype(Cmp)> Heap(Cmp);
+
+    // MovigVertex가 NewPos로 옮겨질 때
+    // 그 정점 주변 삼각형의 법선이 뒤집히는지 검사.
+    auto WouldFlip = [&](uint32 MovingVertex, uint32 OtherVertex, const FVector& NewPos) -> bool
+    {
+        constexpr float FlipThreshold = 0.5f;
+
+        // 움직일 정점과 인접한 삼각형 순회하기
+        for (int32 TriIdx : VertTris[MovingVertex])
+        {
+            if (!bTriAlive[TriIdx]) continue;
+            uint32 Tri[3] = { Indices[TriIdx*3+0], Indices[TriIdx*3+1], Indices[TriIdx*3+2] };
+
+            // 없어질 정점이면 검사 pass
+            if (Tri[0]==OtherVertex || Tri[1]==OtherVertex || Tri[2]==OtherVertex) continue;
+
+
+            // 기존 삼각형의 법선 벡터 구하기
+            const FVector P0 = Verts[Tri[0]].Pos, P1 = Verts[Tri[1]].Pos, P2 = Verts[Tri[2]].Pos;
+            FVector OldNormal = FVector::cross(P1-P0, P2-P0);
+            const float OldLenSq = OldNormal.LengthSquared();
+
+            if (OldLenSq < 1e-8f) continue;
+
+            // 새로운 삼각형의 법선 벡터 구하기
+            const FVector NP0 = (Tri[0] == MovingVertex) ? NewPos : P0;
+            const FVector NP1 = (Tri[1] == MovingVertex) ? NewPos : P1;
+            const FVector NP2 = (Tri[2] == MovingVertex) ? NewPos : P2;
+
+            FVector NewNormal = FVector::cross(NP1-NP0, NP2-NP0);
+            const float NewLenSq = NewNormal.LengthSquared();
+
+            if (NewLenSq < 1e-8f) continue;
+
+            // 원래 삼각형과 새로운 삼각형의 내적으로 음수면 뒤집힌 거임.
+            // 0이면 꺾인 거인데, Threshold 0.2로 두어서 거의 납작해도 뒤집힌 거로 판정.
+            const float Dot = FVector::dot(OldNormal, NewNormal);
+            
+            // 제곱근 연산은 비싸므로 제곱으로 처리
+            if (Dot < 0.0f || Dot * Dot < 0.04f * OldLenSq * NewLenSq)  return true;
+        }
+        return false;
+    };
 
     auto MakeCandidate = [&](uint32 A, uint32 B) -> FCandidate
     {
@@ -165,7 +263,33 @@ void SimplifySection(TArray<FVertex>& Verts, TArray<uint32>& Indices, int32 Targ
         if(Top.VerA != VertVersion[Top.A] || Top.VerB != VertVersion[Top.B]) continue;
         if(!bVertAlive[Top.A] || !bVertAlive[Top.B]) continue;
 
+        // 뒤집힘 검사 (뒤집혔으면 축약 제외)
+        if (WouldFlip(Top.A, Top.B, Top.Target) || WouldFlip(Top.B, Top.A, Top.Target)) 
+            continue;
+
         uint32 KeepIdx = Top.A, RemoveIdx = Top.B;
+
+        // UV / Normal / Color 보간
+        // Target의 원래 위치(비율) 구해서 그 비율로 속성 mix
+        {
+            const FVector OldA = Verts[KeepIdx].Pos;
+            const FVector OldB = Verts[RemoveIdx].Pos;
+            const FVector AB = OldB - OldA;
+            const float LenSq = AB.LengthSquared();
+
+            float T = 0.5f;
+            if (LenSq > 1e-12f)
+            {
+                // Target을 AB에 투영하여 위치 확인
+                T = FVector::dot(Top.Target - OldA, AB) / LenSq;
+                T = FMath::Max(0.0f, FMath::Min(1.0f, T));  // Clamp
+            }
+
+            Verts[KeepIdx].Normal = Verts[KeepIdx].Normal * (1.0f - T) + Verts[RemoveIdx].Normal * T;
+            Verts[KeepIdx].Normal.Normalize();
+            Verts[KeepIdx].Color = Verts[KeepIdx].Color * (1.0f - T) + Verts[RemoveIdx].Color * T;
+            Verts[KeepIdx].Tex = Verts[KeepIdx].Tex * (1.0f - T) + Verts[RemoveIdx].Tex * T;
+        }
 
         for (uint32 TriIdx : VertTris[RemoveIdx])
         {

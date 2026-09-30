@@ -1,6 +1,6 @@
 cbuffer ModelConstants : register(b0) // FConstants
 {
-	row_major matrix ModelView;
+	row_major matrix Model;
 	float4 Color;
     float2 uv_offset;
 	int UseVertexColor;
@@ -15,7 +15,7 @@ cbuffer ViewConstants : register(b1) // FConstants
 struct VS_INPUT
 {
 	float4 position : POSITION;
-    // float3 normal : NORMAL;
+    float3 normal : NORMAL;
 	float4 color : COLOR;
     float2 uv : TEXCOORD0;
 };
@@ -23,7 +23,7 @@ struct VS_INPUT
 struct PS_INPUT
 {
 	float4 position : SV_POSITION;
-    // float3 normal : NORMAL;
+    float3 normal : NORMAL;
 	float4 color : COLOR;
     float2 uv : TEXCOORD0;
 };
@@ -35,10 +35,10 @@ SamplerState default_sampler : register(s0);
 PS_INPUT mainVS(VS_INPUT input)
 {
 	PS_INPUT output;
-    
-	output.position = mul(input.position, ModelView);
-    // output.normal = input.normal;
-	
+
+	output.position = mul(mul(input.position, Model), View);
+    output.normal = input.normal;
+
 	if (UseVertexColor != 0)
 	{
 		output.color = input.color;

@@ -785,6 +785,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			}
 		}
 
+		ImGui::SliderFloat("LOD1 Distance", &GLOD1DistanceRatio, 5.0f, 150.0f);
+
 		if (ImGui::Button("All on"))
 		{
 			GCullingMode = ECullingMode::BVH;
