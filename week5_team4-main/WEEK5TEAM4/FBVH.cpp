@@ -209,7 +209,7 @@ void FBVH::QueryFrustum(const FFrustum& Frustum, const std::function<void(UPrimi
 }
 
 // Picking 용 (Ray와 가장 가까운 Component 반환)
-UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount, const FFrustum* Frustum) const
+UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTestCount) const
 {
     if (RootIndex < 0) return nullptr;
     
@@ -239,15 +239,14 @@ UPrimitiveComponent* FBVH::QueryNearestHit(const FPickingRay& Ray, uint64* OutTe
                 if (!RayIntersectsAABB(RaySIMD, NearestT, Item->GetBoundingBox(), ItemEnter))
                     continue;
 
-                // 화면에서 안 보이는 건 피킹 후보 제외
-                if (Frustum && !Frustum->Intersects(Item->GetBoundingBox()))
-                    continue;
+                // 프러스텀 검사는 하지 않는다. 피킹 레이(Near~Far)는 전부 프러스텀 안에 있으므로
+                // 위에서 Ray-AABB를 통과했으면 프러스텀과도 반드시 겹친다.
 
                 // Picking Test count ++
                 if (OutTestCount) ++(*OutTestCount);
 
                 float HitT = FLT_MAX;
-                if (Item->RayCastComponent(Ray, HitT) && HitT < NearestT)
+                if (Item->RayCastComponent(Ray, NearestT, HitT) && HitT < NearestT)
                 {
                     NearestT = HitT;
                     NearestComponent = Item;

@@ -105,17 +105,13 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 	mRayNear = NearPoint;
 	mRayFar = FarPoint;
 
-	float NearlistT = FLT_MAX;
+	float NearestT = FLT_MAX;
 	AActor* NearestActor = nullptr;
 	const FPickingRay PickingRay(NearPoint, FarPoint);
 
 	if (GPickingMode != EPickingMode::BruteForce)
 	{
-		// Frustum을 넘기면 화면 밖 오브젝트는 후보에서 빠진다.
-		const FFrustum* PickFrustum = (GPickingMode == EPickingMode::BVHFrustum)
-			? RenderCollector.Frustum : nullptr;
-
-		UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount, PickFrustum);
+		UPrimitiveComponent* NearestComponent = BVH.QueryNearestHit(PickingRay, &PickTestCount);
 		NearestActor = NearestComponent ? NearestComponent->GetOwner() : nullptr;
 	}
 	else
@@ -126,15 +122,23 @@ AActor* FEditorViewportClient::PerformMousePicking(const FRect& ViewportRect, fl
 		{
 			// 충돌 검사할 때마다 +1
 			++PickTestCount;
-			float HitT = FLT_MAX;
-			if (!PickTarget->RayCastComponent(PickingRay, HitT))
+
+			//  AABB 사전 판정을 호출하는 쪽으로 옮김
+			float Enter;
+			if (!RayIntersectsAABB(PickingRay.ToRay(), PickingRay.Length, PickTarget->GetBoundingBox(), Enter))
 			{
 				continue;
 			}
 
-			if (HitT < NearlistT)
+			float HitT = FLT_MAX;
+			if (!PickTarget->RayCastComponent(PickingRay, NearestT, HitT))
 			{
-				NearlistT = HitT;
+				continue;
+			}
+
+			if (HitT < NearestT)
+			{
+				NearestT = HitT;
 				NearestActor = PickTarget->GetOwner();  // 가장 가까운 액터를 반환
 			}
 		}

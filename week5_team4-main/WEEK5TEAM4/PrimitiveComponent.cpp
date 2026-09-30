@@ -90,17 +90,14 @@ const TArray<uint32>& UPrimitiveComponent::GetMeshIndices() const
 	static const TArray<uint32> EmptyIndices; return EmptyIndices;
 }
 
-bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float& OutHitT) const
+bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float MaxT, float& OutHitT) const
 {
-	const FMatrix WorldMatrix = GetCacheWorldMatrix();
 
-	// AABB 충돌체를 이용한 광선-메시 충돌 최적화
-	const FAABB BoundingBox = GetBoundingBox();
-	float Enter;
-	if (!RayIntersectsAABB(PickingRay.ToRay(), PickingRay.Length, BoundingBox, Enter))
-	{
-		return false;
-	}
+	if (PickingRay.Length <= 0.f) return false;
+
+	// 월드 거리 상한 -> 로컬 파라미터(0~1) 상한
+	const float LocalMaxT = (std::min) ((MaxT / PickingRay.Length), 1.0f);
+	const FMatrix& WorldMatrix = GetCacheWorldMatrix(); 
 
 	// 메시 충돌체를 이용한 광선-삼각형 충돌 판정
 	const TArray<FVertex>& vertices = GetMeshVertices();
@@ -121,7 +118,7 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 	{
 		if (BVH->IsValid())
 		{
-			float T = 1.0f;
+			float T = LocalMaxT;	// 이미 찾은 것보다 먼 것은 bvh가 잘라냄.
 			if (BVH->RayCast(LocalNear, D, T))
 			{
 				OutHitT = T * PickingRay.Length;
@@ -143,7 +140,7 @@ bool UPrimitiveComponent::RayCastComponent(const FPickingRay& PickingRay, float&
 	const __m128 One = _mm_set1_ps(1.0f);
 
 	bool bHit = false;
-	float NearestT = FLT_MAX;
+	float NearestT = LocalMaxT;
 
 	const int32 TriCount = indices.Num() / 3;
 	for (int32 TriBase = 0; TriBase < TriCount; TriBase += 4)

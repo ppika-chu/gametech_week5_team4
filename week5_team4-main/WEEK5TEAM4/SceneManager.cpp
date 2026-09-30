@@ -803,7 +803,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		if (ImGui::Button("All on"))
 		{
 			GCullingMode = ECullingMode::BVH;
-			GPickingMode = EPickingMode::BVHFrustum;
+			GPickingMode = EPickingMode::BVH;
 			for (bool& b : GOptEnabled) { b = true; }
 		}
 		ImGui::SameLine();

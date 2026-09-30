@@ -8,7 +8,7 @@ inline float GetLOD2DistanceRatio() { return GLOD1DistanceRatio * GLOD2DistanceM
 
 enum class ECullingMode : uint8
 {
-    Off = 0,    // 컬링 안 함. 전부 그린다
+    Off = 0,    // 컬링 안 함.
     Linear,     // 전체 액터 선형 순회 + 오브젝트별 프러스텀 검사
     BVH,        // BVH 순회로 서브트리 단위 스킵
     Count
@@ -16,20 +16,18 @@ enum class ECullingMode : uint8
 
 enum class EPickingMode : uint8
 {
-    BruteForce = 0, // 후보 전체를 레이캐스트
+    BruteForce = 0, // 후보 전체 레이캐스트
     BVH,            // BVH 순회
-    BVHFrustum,     // BVH 순회 + 화면 밖 후보 제외
     Count
 };
 
 inline ECullingMode GCullingMode = ECullingMode::BVH;
-inline EPickingMode GPickingMode = EPickingMode::BVHFrustum;
+inline EPickingMode GPickingMode = EPickingMode::BVH;
 
-// enum 순서와 일치해야 함 (ImGui Combo 라벨)
+// enum 순서와 일치해야 함
 inline constexpr const char* GCullingModeNames[] = { "Off", "Linear", "BVH" };
-inline constexpr const char* GPickingModeNames[] = { "Brute Force", "BVH", "BVH + Frustum" };
+inline constexpr const char* GPickingModeNames[] = { "Brute Force", "BVH" };
 
-// --- 서로 독립적으로 켜고 끄는 플래그 ---
 
 enum class EOptFlag : uint8
 {
