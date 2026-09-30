@@ -417,38 +417,60 @@ struct FMatrix {
 	// Transpose() 와 달리 비균등 스케일에도 동작한다.
 	[[nodiscard]] FMatrix AffineInverse() const
 	{
-		const float C00 =  (M[1][1] * M[2][2] - M[1][2] * M[2][1]);
-		const float C01 = -(M[1][0] * M[2][2] - M[1][2] * M[2][0]);
-		const float C02 =  (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+		const __m128 A = _mm_loadu_ps(M[0]);
+		const __m128 B = _mm_loadu_ps(M[1]);
+		const __m128 C = _mm_loadu_ps(M[2]);
 
-		const float Det = M[0][0] * C00 + M[0][1] * C01 + M[0][2] * C02;
+		const auto Cross = [](__m128 X, __m128 Y) -> __m128
+		{
+			const __m128 Xyzx = _mm_shuffle_ps(X, X, _MM_SHUFFLE(3, 0, 2, 1));
+			const __m128 Xzxy = _mm_shuffle_ps(X, X, _MM_SHUFFLE(3, 1, 0, 2));
+			const __m128 Yyzx = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 0, 2, 1));
+			const __m128 Yzxy = _mm_shuffle_ps(Y, Y, _MM_SHUFFLE(3, 1, 0, 2));
+
+			return _mm_sub_ps(
+				_mm_mul_ps(Xyzx, Yzxy),
+				_mm_mul_ps(Xzxy, Yyzx));
+		};
+
+		__m128 Cofactor0 = Cross(B, C);
+		__m128 Cofactor1 = Cross(C, A);
+		__m128 Cofactor2 = Cross(A, B);
+
+		// det = dot(A, Cofactor0). w 성분은 0이다.
+		const __m128 Products = _mm_mul_ps(A, Cofactor0);
+		const __m128 PairSums = _mm_add_ps(Products, _mm_movehl_ps(Products, Products));
+		const __m128 DetVector = _mm_add_ss(PairSums, _mm_shuffle_ps(PairSums, PairSums, _MM_SHUFFLE(1, 1, 1, 1)));
+		const float Det = _mm_cvtss_f32(DetVector);
+		
 		if (FMath::Abs(Det) < SMALL_NUMBER)
 		{
-			return FMatrix::Zero;   // 스케일 0 등 역행렬이 없는 경우
+			return FMatrix::Zero;
 		}
 
-		const float C10 = -(M[0][1] * M[2][2] - M[0][2] * M[2][1]);
-		const float C11 =  (M[0][0] * M[2][2] - M[0][2] * M[2][0]);
-		const float C12 = -(M[0][0] * M[2][1] - M[0][1] * M[2][0]);
-		const float C20 =  (M[0][1] * M[1][2] - M[0][2] * M[1][1]);
-		const float C21 = -(M[0][0] * M[1][2] - M[0][2] * M[1][0]);
-		const float C22 =  (M[0][0] * M[1][1] - M[0][1] * M[1][0]);
+		const __m128 InvDet = _mm_set1_ps(1.0f / Det);
+		Cofactor0 = _mm_mul_ps(Cofactor0, InvDet);
+		Cofactor1 = _mm_mul_ps(Cofactor1, InvDet);
+		Cofactor2 = _mm_mul_ps(Cofactor2, InvDet);
 
-		const float Inv = 1.0f / Det;
+		// 여인수 행렬을 전치해 역행렬의 행 3개를 만든다.
+		__m128 Row3 = _mm_setzero_ps();
+		_MM_TRANSPOSE4_PS(Cofactor0, Cofactor1, Cofactor2, Row3);
 
-		FMatrix R = FMatrix::Identity;
+		const __m128 Translation = _mm_sub_ps( _mm_setzero_ps(),
+			_mm_add_ps(
+				_mm_add_ps(
+					_mm_mul_ps(_mm_set1_ps(M[3][0]), Cofactor0),
+					_mm_mul_ps(_mm_set1_ps(M[3][1]), Cofactor1)),
+				_mm_mul_ps(_mm_set1_ps(M[3][2]), Cofactor2)));
 
-		// 수반행렬 = 여인수 행렬의 전치
-		R.M[0][0] = C00 * Inv;  R.M[0][1] = C10 * Inv;  R.M[0][2] = C20 * Inv;
-		R.M[1][0] = C01 * Inv;  R.M[1][1] = C11 * Inv;  R.M[1][2] = C21 * Inv;
-		R.M[2][0] = C02 * Inv;  R.M[2][1] = C12 * Inv;  R.M[2][2] = C22 * Inv;
+		FMatrix Result;
+		_mm_storeu_ps(Result.M[0], Cofactor0);
+		_mm_storeu_ps(Result.M[1], Cofactor1);
+		_mm_storeu_ps(Result.M[2], Cofactor2);
+		_mm_storeu_ps(Result.M[3], _mm_add_ps(Translation, _mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f)));
 
-		// 이동 성분 : -t * A^-1
-		R.M[3][0] = -(M[3][0] * R.M[0][0] + M[3][1] * R.M[1][0] + M[3][2] * R.M[2][0]);
-		R.M[3][1] = -(M[3][0] * R.M[0][1] + M[3][1] * R.M[1][1] + M[3][2] * R.M[2][1]);
-		R.M[3][2] = -(M[3][0] * R.M[0][2] + M[3][1] * R.M[1][2] + M[3][2] * R.M[2][2]);
-		
-		return R;
+		return Result;
 	}
 
 	// 월드 transform 행렬일 때, 이동 벡터만 뽑아오는 용도
