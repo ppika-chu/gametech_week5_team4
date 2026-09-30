@@ -505,8 +505,24 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			const float ShownFPS = SmoothFrameMs > 0.f ? 1000.0f / SmoothFrameMs : 0.f;
 			const float ShownCpuMs = (std::max)(SmoothFrameMs - SmoothGpuMs, 0.f);
 
-			ImGui::Text("FPS: %.1f", ShownFPS);
-			ImGui::Text("Frame Time: %.2f ms", SmoothFrameMs);
+			// 순간값: 직전 한 프레임의 시간만으로 계산 (매 프레임 흔들림, 비교용)
+			ImGui::Text("FPS (Tick): %.1f", guiReference.FrameTimer->GetFPS());
+			ImGui::Text("Frame Time (Tick): %.2f ms", FrameTimeMs);
+
+			// 지수 이동 평균: 매 프레임 부드럽게 따라가는 화면 표시용 값
+			ImGui::Text("FPS (EMA): %.1f", ShownFPS);
+			ImGui::Text("Frame Time (EMA): %.2f ms", SmoothFrameMs);
+
+			// 구간 평균: 0.5초 동안 실제로 그린 프레임 수 기준. 측정/비교용 값
+			const FFrameTimer* Timer = guiReference.FrameTimer;
+			ImGui::Text("FPS (0.5s Avg): %.1f", Timer->GetIntervalAverageFPS());
+			ImGui::Text("Frame Time (0.5s Avg): %.2f ms", Timer->GetIntervalAverageFrameMs());
+			ImGui::Text("Frame Min / Max: %.2f / %.2f ms", Timer->GetIntervalMinFrameMs(), Timer->GetIntervalMaxFrameMs());
+
+			// 해상도: 창(백버퍼) 전체와 3D 씬이 그려지는 뷰포트 영역
+			const URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			ImGui::Text("Window: %u x %u", Renderer->GetWidth(), Renderer->GetHeight());
+			ImGui::Text("Viewport: %.0f x %.0f", mViewportWidth, mViewportHeight);
 			// ImGui::Text("Frame: %.2f ms", guiReference.FrameTimer->GetDeltaTime() * 1000.0f);
 			
 			// CPU / GPU
